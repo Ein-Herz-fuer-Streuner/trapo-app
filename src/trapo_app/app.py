@@ -1,6 +1,7 @@
 #!/bin/python3
 import io_helpers
 import table_helpers
+import pandas as pd
 
 def main():
     print("Willkommen bei der Trapo App!")
@@ -18,8 +19,17 @@ def compare():
     #print("Gib nun den Pfad zur Datei aus PetOffice ein")
     # file2 = io_helpers.get_file()
     df2 = io_helpers.read_file("data/docx2.docx")
+
    # print("Vergleiche...")
-    table_helpers.compare(df1, df2)
+    df = table_helpers.compare(df1, df2)
+
+    writer = pd.ExcelWriter('./Trapo_Vergleich.xlsx')
+    df.to_excel(writer, sheet_name='Auto-Vergleich', index=False)
+    for column in df:
+        column_length = max(df[column].astype(str).map(len).max(), len(column))
+        col_idx = df.columns.get_loc(column)
+        writer.sheets['Auto-Vergleich'].set_column(col_idx, col_idx, column_length)
+    writer.close()
 
 def rename():
     print("Benenne Traces um...")
