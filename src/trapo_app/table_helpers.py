@@ -1,4 +1,6 @@
 import pandas as pd
+import string
+from dateutil import parser
 
 def clean_compare_table(df):
     df = df.rename(columns= {"Daten ES/PS/PSO": "Kontakt", "Microchip": "Chip"}, errors= "ignore")
@@ -13,10 +15,44 @@ def clean_compare_table(df):
     new_df = new_df.sort_values('Name')
     return new_df
 
-def compare(df1, df2):
-    # TODO
+def clean_name(name):
+    name = name.lower().replace("box change", "").strip()
+    return string.capwords(name)
+
+def clean_dob(dob):
+    if dob == "":
+        return ""
+    return parser.parse(dob, dayfirst=True).strftime("%d.%m.%Y")
+
+def clean_contact(contact):
+    parts = contact.split('\n')
+    result = []
+    for part in parts:
+        part = part.title()
+        if "@" in part or part.isdigit():
+            continue
+        result.append(part)
+    return ", ".join(result)
+
+def prep_work(df1, df2):
     df1 = clean_compare_table(df1)
-    print(df1)
+    df1['Name'] = df1['Name'].apply(clean_name)
+    df1['DOB'] = df1['DOB'].apply(clean_dob)
+    df1['Kontakt'] = df1['Kontakt'].apply(clean_contact)
     df2 = clean_compare_table(df2)
-    print(df2)
+    df2['Name'] = df2['Name'].apply(clean_name)
+    df2['DOB'] = df2['DOB'].apply(clean_dob)
+    df2['Kontakt'] = df2['Kontakt'].apply(clean_contact)
+    return df1, df2
+
+def compare(df1, df2):
+    df1, df2 = prep_work(df1, df2)
+    len_df1 = df1.size
+    len_df2 = df2.size
+    max_len = max(len_df1, len_df2)
+    min_len = min(len_df1, len_df2)
+    if len_df1 != len_df2:
+        print("Oh oh, die Listen haben nicht die gleiche Länge!")
+    df1["Differenzen"] = ""
+    # TODO actual comparing
     return False
