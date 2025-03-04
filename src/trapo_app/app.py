@@ -12,13 +12,13 @@ def main():
     print("- trapo-kennzeichen: Sortiert eine Tabelle nach Entfernungen der angegeben Adressen")
 
 def compare():
-    print("Gib als erstes den Pfad zur Datei aus dem Messanger ein, z.B. './data/chat.docx'")
+    #print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
     # file1 = io_helpers.get_file()
-    df1 = io_helpers.read_file("data/chat.docx")
-    print("Gib nun den Pfad zur Datei aus PetOffice ein")
+    df1 = io_helpers.read_file("data/chat2.docx")
+    #print("Gib nun den Pfad zur Datei aus PetOffice ein")
     # file2 = io_helpers.get_file()
-    df2 = io_helpers.read_file("data/petoffice.docx")
-    print("Vergleiche...")
+    df2 = io_helpers.read_file("data/docx2.docx")
+   # print("Vergleiche...")
     table_helpers.compare(df1, df2)
 
 def rename():

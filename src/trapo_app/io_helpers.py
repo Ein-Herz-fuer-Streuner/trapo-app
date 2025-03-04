@@ -6,7 +6,7 @@ def get_file():
     is_valid = False
     path = ""
     while not is_valid:
-        path = str(input("Bitte gib den Pfad zu einer Datei (.xlsx, .csv, .docx) ein:"))
+        path = str(input("Bitte gib den Pfad zu einer Datei (.xlsx, .csv, .docx, .pdf) ein:"))
         if path.endswith(".xlsx") or path.endswith(".csv") or path.endswith(".docx"):
             is_valid = True
     path = os.path.abspath(path)
@@ -32,21 +32,25 @@ def read_file(path):
         return None
     return df
 
+def iter_unique_cells(cells):
+    prior_cell = None
+    for c in cells:
+        if c == prior_cell:
+            continue
+        yield c
+        prior_cell = c
+
 def read_docx(path):
     document = Document(path)
-    tables = []
+    data = []
     for table in document.tables:
-        # Create a DataFrame structure with empty strings, sized by the number of rows and columns in the table
-        df = [['' for _ in range(len(table.columns))] for _ in range(len(table.rows))]
+        for row in table.rows:
+            data.append([cell.text.strip() for cell in list(iter_unique_cells(row.cells))])
 
-        # Iterate through each row in the current table
-        for i, row in enumerate(table.rows):
-            # Iterate through each cell in the current row
-            for j, cell in enumerate(row.cells):
-                # If the cell has text, store it in the corresponding DataFrame position
-                if cell.text:
-                    df[i][j] = cell.text
+    # Convert the data to a DataFrame
+    df = pd.DataFrame(data)
 
-        # Convert the list of lists (df) to a pandas DataFrame and add it to the tables list
-        tables.append(pd.DataFrame(df))
-    return tables[0]
+    # Optional: If the first row is the header
+    df.columns = df.iloc[0]
+    df = df[1:].reset_index(drop=True)
+    return df
