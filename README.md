@@ -27,9 +27,11 @@ Danach gib folgendes ein:
 pip install --upgrade pip
 pip install -e .
 ```
+Auf Mac und Linux musst du eventuell `pip` mit `pip3` ersetzen.
 
 Das installiert die Trapo App. 
 Lasse das Terminal offen.
 
 Und das wars mit dem Setup. Weiter gehts mit der Benutzung.
 # Benutzung
+In dem Word-Dokument aus dem Messenger Chat, benenne bitte die Spalte mit den Kontaktdaten der Adoptanten um zu "Kontakt".
