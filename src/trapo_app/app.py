@@ -4,7 +4,7 @@ import table_helpers
 import pandas as pd
 
 def main():
-    print("Willkommen bei der Trapo App!")
+    print("Willkommen bei der Trapo App! 🐶🚐")
     print()
     print("Du kannst folgende Konsolen-Befehle benutzen:")
     print("- trapo-vergleich: Vergleicht 2 Tabellen")
@@ -36,7 +36,8 @@ def rename():
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
 
 def compare_with_traces():
-    print("Benenne Traces um...")
+    print("Vergleiche mit Traces...")
+    print("Das kann dauern. Bitte warten...")
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
 
 def distance():
