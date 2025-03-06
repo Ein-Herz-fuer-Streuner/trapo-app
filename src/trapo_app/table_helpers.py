@@ -2,9 +2,11 @@ import pandas as pd
 import string
 from dateutil import parser
 import re
+from thefuzz import fuzz
 
 phone_regex = r'[\+0-9\/\s-]{8,}'
 email_regex = r'[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+sim_thresh = 90
 
 def clean_compare_table(df):
     df = df.rename(columns={"Daten ES/PS/PSO": "Kontakt", "Microchip": "Chip"}, errors="ignore")
@@ -48,6 +50,7 @@ def clean_contact(contact):
         part = part.replace(",Österreich", "")
         part = part.replace("(Österreich)", "")
         part = part.replace("( Österreich)", "")
+        part = re.sub(r'(Tel\.?|Telefon|Mobil)?:?\s?[+0-9/\s-]{8,}', "", part)
         part = part.strip()
         match_mail = re.search(email_regex, part)
         match_phone = re.search(phone_regex, part)
@@ -91,14 +94,23 @@ def compare(df1, df2):
         if row["Name"] in df2["Name"].values:
             matched_row = df2[df2["Name"] == row["Name"]].iloc[0]
             diffs = []
-            if row["Kontakt"] != matched_row["Kontakt"]:
-                diffs.append(f"Kontakt: {row['Kontakt'] if row["Kontakt"] != "" else "''"} -> {matched_row['Kontakt'] if matched_row["Kontakt"] != "" else "''"}")
-            if row["DOB"] != matched_row["DOB"]:
-                diffs.append(f"DOB: {row['DOB'] if row["DOB"] != "" else "''"} -> {matched_row['DOB'] if matched_row["DOB"] != "" else "''"}")
-            if row["Chip"] != matched_row["Chip"]:
-                diffs.append(f"Chip: {row['Chip'] if row["Chip"] != "" else "''"} -> {matched_row['Chip'] if matched_row['Chip'] != "" else "''"}")
 
-            difference = "\n".join(diffs) if diffs else "\u2705"
+            if row["Kontakt"] != matched_row["Kontakt"]:
+                similarity = fuzz.ratio(row["Kontakt"], matched_row["Kontakt"])
+                if similarity < sim_thresh:
+                   # filter Max Mustermann vs Max Mustermann und Marlene Musterfrau
+                    name_row = row["Kontakt"].split(",")[0]
+                    name_matched_row = matched_row["Kontakt"].split(",")[0]
+                    if not (name_row in name_matched_row or name_matched_row in name_row):
+                        diffs.append(f"Kontakt: {row['Kontakt'] if row["Kontakt"] != "" else "''"} \u2192 {matched_row['Kontakt'] if matched_row["Kontakt"] != "" else "''"}")
+
+            if row["DOB"] != matched_row["DOB"]:
+                diffs.append(f"DOB: {row['DOB'] if row["DOB"] != "" else "''"} \u2192 {matched_row['DOB'] if matched_row["DOB"] != "" else "''"}")
+
+            if row["Chip"] != matched_row["Chip"]:
+                diffs.append(f"Chip: {row['Chip'] if row["Chip"] != "" else "''"} \u2192 {matched_row['Chip'] if matched_row['Chip'] != "" else "''"}")
+
+            difference = ", ".join(diffs) if diffs else "\u2713"
             differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],  "Kontakt": row["Kontakt"],
                                 "Differenz": difference})
         else:
