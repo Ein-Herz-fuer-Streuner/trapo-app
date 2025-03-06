@@ -3,6 +3,7 @@ Die Trapo-App soll alles rund um die Trapos bei Ein Herz für Streuner automatis
 
 Da es relativ viel um Dokumenten und Datenverarbeitung geht, wird sie als Python-Package entwickelt.
 
+Die vollständige Anleitung findest du im Sharepoint!
 # Installation
 Um dieses Skript auszuführen, musst du ein bisschen was installieren (sofern du das nicht schon hast).
 
