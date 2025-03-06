@@ -8,12 +8,22 @@ def get_file():
     is_valid = False
     path = ""
     while not is_valid:
-        path = str(input("Bitte gib den Pfad zu einer Datei (.xlsx, .csv, .docx, .pdf) ein:"))
+        path = str(input("Bitte gib den Pfad zu einer Datei (.xlsx, .csv, .docx) ein:"))
         if path.endswith(".xlsx") or path.endswith(".csv") or path.endswith(".docx"):
             is_valid = True
     path = os.path.abspath(path)
     return path
 
+
+def get_path():
+    is_valid = False
+    path = ""
+    while not is_valid:
+        path = str(input("Bitte gib den Pfad zu einem Order ein:"))
+        if os.path.exists(path):
+            is_valid = True
+    path = os.path.abspath(path)
+    return path
 
 def read_file(path):
     df = []
