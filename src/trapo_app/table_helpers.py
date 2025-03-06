@@ -121,14 +121,14 @@ def compare(df1, df2):
                                 "Differenz": difference})
         else:
             differences.append(
-                {"Name": row["Name"], "Chip": row["Chip"], "Kontakt": row["Kontakt"], "Differenz": "Fehlt in Datei 2"})
+                {"Name": row["Name"], "Chip": row["Chip"], "Kontakt": row["Kontakt"], "Differenz": "Fehlt in PetOffice-Datei"})
 
     # Compare df2 against df1 for missing names
     for index, row in df2.iterrows():
         if row["Name"] not in df1["Name"].values:
             differences.append(
                 {"Name": row["Name"], "Ort": "?", "Chip": row["Chip"], "DOB": row["DOB"], "Kontakt": row["Kontakt"],
-                 "Differenz": "Fehlt in Datei 1"})
+                 "Differenz": "Fehlt in Chat-Datei"})
 
     # Result DataFrame
     df_result = pd.DataFrame(differences)
