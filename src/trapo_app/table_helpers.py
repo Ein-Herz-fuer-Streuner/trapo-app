@@ -1,12 +1,14 @@
-import pandas as pd
-import string
-from dateutil import parser
 import re
+import string
+
+import pandas as pd
+from dateutil import parser
 from thefuzz import fuzz
 
 phone_regex = r'[\+0-9\/\s-]{8,}'
 email_regex = r'[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 sim_thresh = 90
+
 
 def clean_compare_table(df):
     df = df.rename(columns={"Daten ES/PS/PSO": "Kontakt", "Microchip": "Chip"}, errors="ignore")
@@ -98,20 +100,24 @@ def compare(df1, df2):
             if row["Kontakt"] != matched_row["Kontakt"]:
                 similarity = fuzz.ratio(row["Kontakt"], matched_row["Kontakt"])
                 if similarity < sim_thresh:
-                   # filter Max Mustermann vs Max Mustermann und Marlene Musterfrau
+                    # filter Max Mustermann vs Max Mustermann und Marlene Musterfrau
                     name_row = row["Kontakt"].split(",")[0]
                     name_matched_row = matched_row["Kontakt"].split(",")[0]
                     if not (name_row in name_matched_row or name_matched_row in name_row):
-                        diffs.append(f"Kontakt: {row['Kontakt'] if row["Kontakt"] != "" else "''"} \u2192 {matched_row['Kontakt'] if matched_row["Kontakt"] != "" else "''"}")
+                        diffs.append(
+                            f"Kontakt: {row['Kontakt'] if row["Kontakt"] != "" else "''"} \u2192 {matched_row['Kontakt'] if matched_row["Kontakt"] != "" else "''"}")
 
             if row["DOB"] != matched_row["DOB"]:
-                diffs.append(f"DOB: {row['DOB'] if row["DOB"] != "" else "''"} \u2192 {matched_row['DOB'] if matched_row["DOB"] != "" else "''"}")
+                diffs.append(
+                    f"DOB: {row['DOB'] if row["DOB"] != "" else "''"} \u2192 {matched_row['DOB'] if matched_row["DOB"] != "" else "''"}")
 
             if row["Chip"] != matched_row["Chip"]:
-                diffs.append(f"Chip: {row['Chip'] if row["Chip"] != "" else "''"} \u2192 {matched_row['Chip'] if matched_row['Chip'] != "" else "''"}")
+                diffs.append(
+                    f"Chip: {row['Chip'] if row["Chip"] != "" else "''"} \u2192 {matched_row['Chip'] if matched_row['Chip'] != "" else "''"}")
 
             difference = ", ".join(diffs) if diffs else "\u2713"
-            differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],  "Kontakt": row["Kontakt"],
+            differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
+                                "Kontakt": row["Kontakt"],
                                 "Differenz": difference})
         else:
             differences.append(
@@ -120,8 +126,9 @@ def compare(df1, df2):
     # Compare df2 against df1 for missing names
     for index, row in df2.iterrows():
         if row["Name"] not in df1["Name"].values:
-            differences.append({"Name": row["Name"], "Ort": "?", "Chip": row["Chip"], "DOB": row["DOB"], "Kontakt": row["Kontakt"],
-                                "Differenz": "Fehlt in Datei 1"})
+            differences.append(
+                {"Name": row["Name"], "Ort": "?", "Chip": row["Chip"], "DOB": row["DOB"], "Kontakt": row["Kontakt"],
+                 "Differenz": "Fehlt in Datei 1"})
 
     # Result DataFrame
     df_result = pd.DataFrame(differences)

@@ -1,6 +1,8 @@
 import os
+
 import pandas as pd
 from docx import Document
+
 
 def get_file():
     is_valid = False
@@ -12,6 +14,7 @@ def get_file():
     path = os.path.abspath(path)
     return path
 
+
 def read_file(path):
     df = []
     try:
@@ -19,7 +22,7 @@ def read_file(path):
             df = pd.read_excel(path)
         elif path.endswith(".csv"):
             df = pd.read_csv(path)
-        elif  path.endswith(".docx"):
+        elif path.endswith(".docx"):
             df = read_docx(path)
     except ValueError:
         print("Datei ist ungültig")
@@ -32,6 +35,7 @@ def read_file(path):
         return None
     return df
 
+
 def iter_unique_cells(cells):
     prior_cell = None
     for c in cells:
@@ -39,6 +43,7 @@ def iter_unique_cells(cells):
             continue
         yield c
         prior_cell = c
+
 
 def read_docx(path):
     document = Document(path)
