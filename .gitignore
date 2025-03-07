@@ -172,3 +172,4 @@ cython_debug/
 
 data/
 src/test.py
+/Trapo_Vergleich.xlsx
