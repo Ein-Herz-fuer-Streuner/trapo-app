@@ -1,8 +1,8 @@
-#!/bin/python3
+#!/bin/python3.13
 import pandas as pd
 
-import io_helpers
-import table_helpers
+import trapo_app.io_helpers as io_helpers
+import trapo_app.table_helpers as table_helpers
 
 
 def main():
@@ -67,5 +67,4 @@ def distance():
 
 
 if __name__ == "__main__":
-    # main()
-    compare()
+    main()
