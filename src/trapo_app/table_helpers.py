@@ -7,7 +7,7 @@ from thefuzz import fuzz
 
 phone_regex = r'[\+0-9\/\s-]{8,}'
 email_regex = r'[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-sim_thresh = 90
+sim_thresh = 97
 
 
 def clean_compare_table(df):
@@ -105,15 +105,15 @@ def compare(df1, df2):
                     name_matched_row = matched_row["Kontakt"].split(",")[0]
                     if not (name_row in name_matched_row or name_matched_row in name_row):
                         diffs.append(
-                            f"Kontakt: {row['Kontakt'] if row["Kontakt"] != "" else "''"} \u2192 {matched_row['Kontakt'] if matched_row["Kontakt"] != "" else "''"}")
+                            f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
 
             if row["DOB"] != matched_row["DOB"]:
                 diffs.append(
-                    f"DOB: {row['DOB'] if row["DOB"] != "" else "''"} \u2192 {matched_row['DOB'] if matched_row["DOB"] != "" else "''"}")
+                    f"DOB: {row['DOB'] if row['DOB'] != '' else '\'\''} \u2192 {matched_row['DOB'] if matched_row['DOB'] != '' else '\'\''}")
 
             if row["Chip"] != matched_row["Chip"]:
                 diffs.append(
-                    f"Chip: {row['Chip'] if row["Chip"] != "" else "''"} \u2192 {matched_row['Chip'] if matched_row['Chip'] != "" else "''"}")
+                    f"Chip: {row['Chip'] if row['Chip'] != '' else '\'\''} \u2192 {matched_row['Chip'] if matched_row['Chip'] != '' else '\'\''}")
 
             difference = ", ".join(diffs) if diffs else "\u2713"
             differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
