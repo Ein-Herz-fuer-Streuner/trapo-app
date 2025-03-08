@@ -13,17 +13,19 @@ def main():
     print("- trapo-traces: Benennt Traces Dokumente um")
     print("- trapo-traces-vergleich: Vergleicht Traces Dokumente mit einer Tabelle")
     print("- trapo-kennzeichen: Sortiert eine Tabelle nach Entfernungen der angegeben Adressen")
+    print("- trapo-komplett: Macht alles aufeinmal! Ein Start, eine Datei am Ende, alles erledigt!")
 
 
 def compare():
     print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
+    print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
     file1 = io_helpers.get_file()
     df1 = io_helpers.read_file(file1)
-    # df1 = io_helpers.read_file("data/chat2.docx")
+    # df1 = io_helpers.read_file("..\\..\\data\\chat.docx")
     print("Gib nun den Pfad zur Datei aus PetOffice ein, z.B. './data/po.docx'")
     file2 = io_helpers.get_file()
     df2 = io_helpers.read_file(file2)
-    # df2 = io_helpers.read_file("data/docx2.docx")
+    # df2 = io_helpers.read_file("..\\..\\data\\po.docx")
 
     print("Vergleiche...")
     df = table_helpers.compare(df1, df2)
@@ -65,6 +67,9 @@ def distance():
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
     print("Fertig! Die Datei liegt unter './Kennzeichen_sortiert.xlsx'")
 
+
+def do_all():
+    print("Dies ist nur ein Dummy, hier passiert noch nichts.")
 
 if __name__ == "__main__":
     main()
