@@ -3,6 +3,15 @@ import os
 import pandas as pd
 from docx import Document
 
+def get_all_files(dir_, ending):
+    pdfs = []
+    for filename in os.listdir(dir_):
+        if filename.endswith(ending):
+            full_path = os.path.join(dir_, filename)
+            pdfs.append(full_path)
+        else:
+            continue
+    return pdfs
 
 def get_file():
     is_valid = False
@@ -13,7 +22,6 @@ def get_file():
             is_valid = True
     path = os.path.abspath(path)
     return path
-
 
 def get_path():
     is_valid = False
