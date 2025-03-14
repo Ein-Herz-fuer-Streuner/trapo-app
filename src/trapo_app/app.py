@@ -46,7 +46,8 @@ def compare():
 def extract():
     print("Gib den Pfad zum Ordner an, in dem alle Traces-Dokumente liegen, z.B. './data/traces'")
     path = io_helpers.get_path()
-    pdfs = io_helpers.get_all_files(path, ".pdf")
+    # pdfs = io_helpers.get_all_files(path, ".pdf")
+    pdfs = io_helpers.get_files(path, ".pdf")
     if len(pdfs) == 0:
         print("Keine PDFs gefunden")
         sys.exit(1)

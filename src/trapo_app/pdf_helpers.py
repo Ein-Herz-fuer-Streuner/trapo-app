@@ -47,9 +47,9 @@ def extract_table_data(files):
             elif "Bestimmungsort" in row:
                 row = row.split("Name ")[1]
                 row = row.split(" ISO")[0]
-                row = row.replace(" Adresse ", "\n")
-                match = re.match(r"(.+?\s\d+[a-z]?)\s(\d{4,}\s.+)", row)
-                row = row + "\n" + match[0] + "\n" + match[1]
+                row = row.replace(" Adresse ", ";")
+                match = re.match(r"(.+);(.*\d+\s?[a-z]?)\s(\d{4,}\s.+)", row)
+                row = match.group(1) + ", " + match.group(2) + ", " + match.group(3)
                 contact = row
             elif "Identifikationsnummer" in row:
                 row = row.replace("Identifikationsnummer ", "")

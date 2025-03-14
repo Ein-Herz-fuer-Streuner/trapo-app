@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from docx import Document
 
-def get_all_files(dir_, ending):
+def get_files(dir_, ending):
     pdfs = []
     for filename in os.listdir(dir_):
         if filename.endswith(ending):
