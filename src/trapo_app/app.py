@@ -51,6 +51,7 @@ def extract():
     if len(pdfs) == 0:
         print("Keine PDFs gefunden")
         sys.exit(1)
+    print("Extrahiere Informationen... Das kann etwas dauern...")
     df = pdf_helpers.extract_traces(pdfs)
     writer = pd.ExcelWriter('./Traces_Extrakt.xlsx')
     df.to_excel(writer, sheet_name='Traces', index=False)
@@ -61,39 +62,33 @@ def extract():
     writer.close()
     print("Fertig! Die Vergleichsdatei liegt unter './Traces_Extrakt.xlsx'")
 
-
-def rename():
-    print("Gib den Pfad zum Ordner an, in dem alle Traces-Dokumente liegen, z.B. './data/traces'")
-    path = io_helpers.get_path()
-    pdfs = io_helpers.get_all_files(path, ".pdf")
-    if len(pdfs) == 0:
-        print("Keine PDFs gefunden")
-        sys.exit(1)
-    print("Gib nun den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Vergleich.xslx'")
-    file1 = io_helpers.get_file()
-    df1 = io_helpers.read_file(file1)
-    print("Dummy Text")
-    print("Fertig, alle Traces-Dateien wurden umbenannt.")
-
-
 def compare_with_traces():
-    print("Gib als erstes den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './data/Trapo_Vergleich.xslx'")
+    print("Gib als erstes den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Vergleich.xlsx'")
     file1 = io_helpers.get_file()
     df1 = io_helpers.read_file(file1)
-    print("Gib nun den Pfad zu Traces_Extract-Tabelle ein, z.B. './Traces_Extrakt.xslx'")
+    print("Gib nun den Pfad zu Traces_Extrakt-Tabelle ein, z.B. './Traces_Extrakt.xlsx'")
     file2 = io_helpers.get_file()
     df2 = io_helpers.read_file(file2)
-    print("Dies ist nur ein Dummy, hier passiert noch nichts.")
-    df = pd.DataFrame() # TODO
-    writer = pd.ExcelWriter('./Trapo_Vergleich.xlsx')
+    print("Vergleiche...")
+    df = table_helpers.compare_traces(df1, df2)
+    writer = pd.ExcelWriter('./Trapo_Traces_Vergleich.xlsx')
     df.to_excel(writer, sheet_name='Traces-Vergleich', index=False)
     for column in df:
         column_length = max(df[column].astype(str).map(len).max(), len(column))
         col_idx = df.columns.get_loc(column)
         writer.sheets['Traces-Vergleich'].set_column(col_idx, col_idx, column_length)
     writer.close()
-    print("Fertig! Die Vergleichsdatei liegt unter './Trapo_Vergleich.xlsx'")
+    print("Fertig! Die Vergleichsdatei liegt unter './Trapo_Traces_Vergleich.xlsx'")
 
+def rename():
+    print("Gib nun den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Traces_Vergleich.xlsx'")
+    file1 = io_helpers.get_file()
+    df1 = io_helpers.read_file(file1)
+    print("Baue neuen Dateinamen...")
+    old, new = table_helpers.write_new_file_names(df1)
+    print(f"Benenne {len(new)} Dateien um...")
+    io_helpers.rename_files(old, new)
+    print("Fertig, alle Traces-Dateien wurden umbenannt.")
 
 def distance():
     print("Gib als erstes den Pfad zur Kennzeichen-Datei ein, z.B. './data/kennzeichen.xlsx'")
@@ -108,5 +103,4 @@ def do_all():
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
 
 if __name__ == "__main__":
-    #main()
-    extract()
+    main()

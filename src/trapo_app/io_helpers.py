@@ -77,3 +77,9 @@ def read_docx(path):
     df.columns = df.iloc[0]
     df = df[1:].reset_index(drop=True)
     return df
+
+def rename_files(col_old, col_new):
+    for old, new in zip(col_old, col_new):
+        dir, file = os.path.split(old)
+        new_path = os.path.join(dir, new)
+        os.rename(old, new_path)

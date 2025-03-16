@@ -25,6 +25,9 @@ replace_dict = {
     "  ": " ",
 }
 
+german_char_map = {ord('ä'): 'ae', ord('ü'): 'ue', ord('ö'): 'oe', ord('ß'): 'ss'}
+
+
 def clean_compare_table(df):
     df = df.rename(columns={"Daten ES/PS/PSO": "Kontakt", "Microchip": "Chip"}, errors="ignore")
     wanted_cols = ['Name', 'Ort', 'Chip', 'Kontakt', 'DOB']
@@ -37,6 +40,10 @@ def clean_compare_table(df):
     new_df = df[got_cols]
     new_df = new_df.sort_values('Name')
     return new_df
+
+
+def clean_german(cell):
+    return cell.translate(german_char_map)
 
 
 def clean_name(name):
@@ -96,6 +103,7 @@ def prep_work(df1, df2):
         df2["Ort"] = df2["Ort"].apply(clean_location)
     return df1, df2
 
+
 def compare_contact(cont1, cont2):
     split1 = cont1.split(",")
     split2 = cont2.split(",")
@@ -134,8 +142,8 @@ def compare_contact(cont1, cont2):
             case 2:
                 ss1 = s1.split(" ")
                 ss2 = s2.split(" ")
-                plz1 =  ss1[0].strip()
-                plz2 =  ss2[0].strip()
+                plz1 = ss1[0].strip()
+                plz2 = ss2[0].strip()
                 city1 = ss1[1].strip()
                 city2 = ss2[1].strip()
                 # Post code has to be an exact match
@@ -150,6 +158,7 @@ def compare_contact(cont1, cont2):
                 print("Oh oh, hier ist was schief gelaufen")
     return True
 
+
 def compare(df1, df2):
     df1, df2 = prep_work(df1, df2)
 
@@ -160,8 +169,8 @@ def compare(df1, df2):
             matched_row = df2[df2["Name"] == row["Name"]].iloc[0]
             diffs = []
             if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
-                        diffs.append(
-                            f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
+                diffs.append(
+                    f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
 
             if row["DOB"] != matched_row["DOB"]:
                 diffs.append(
@@ -177,7 +186,8 @@ def compare(df1, df2):
                                 "Differenz (Chat \u2192 PetOffice)": difference})
         else:
             differences.append(
-                {"Name": row["Name"], "Chip": row["Chip"], "Kontakt": row["Kontakt"], "Differenz (Chat \u2192 PetOffice)": "Fehlt in PetOffice-Datei"})
+                {"Name": row["Name"], "Chip": row["Chip"], "Kontakt": row["Kontakt"],
+                 "Differenz (Chat \u2192 PetOffice)": "Fehlt in PetOffice-Datei"})
 
     # Compare df2 against df1 for missing names
     for index, row in df2.iterrows():
@@ -190,3 +200,75 @@ def compare(df1, df2):
     df_result = pd.DataFrame(differences)
     df_result = df_result.sort_values('Name')
     return df_result
+
+
+def compare_traces(df1, df2):
+    differences = []
+    # Check df1 against df2
+    # df1: Name, Ort, Chip, DOB, Kontakt, Differenz (Chat \u2192 PetOffice)
+    # df2: Datei, Intra, Chip, Kontakt
+    for index, row in df1.iterrows():
+        matched_row = []
+        if row["Chip"] in df2["Chip"].values:
+            matched_row = df2[df2["Chip"] == row["Chip"]].iloc[0]
+        elif row["Differenz"] in df2["Chip"].values:
+            matched_row = df2[df2["Chip"] == row["Differenz"]].iloc[0]
+        if matched_row:
+            diffs = []
+            if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
+                diffs.append(
+                    f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
+
+            difference = ", ".join(diffs) if diffs else "\u2713"
+            differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
+                                "Kontakt": row["Kontakt"], "Intra": matched_row["Intra"], "Datei": matched_row["Datei"],
+                                "Differenz (Chat \u2192 Traces)": difference})
+        else:
+            differences.append(
+                {"Name": row["Name"], "Chip": row["Chip"], "Kontakt": row["Kontakt"], "Intra": "?", "Datei": "?",
+                 "Differenz (Chat \u2192 Traces)": "Fehlt in Traces-Dokumenten"})
+
+    # Compare df2 against df1 for missing names
+    for index, row in df2.iterrows():
+        if row["Chip"] not in df1["Chip"].values or row["Chip"] not in df1["Differenz"].values:
+            differences.append(
+                {"Name": "?", "Ort": "?", "Chip": str(row["Chip"]), "DOB": "?", "Kontakt": row["Kontakt"],
+                 "Intra": row["Intra"], "Datei": row["Datei"],
+                 "Differenz (Chat \u2192 Traces)": "Fehlt in Chat-Datei"})
+    # Result DataFrame
+    df_result = pd.DataFrame(differences)
+    df_result = df_result.sort_values('Name')
+    return df_result
+
+
+def build_file_name(df):
+    files_old = df.drop_duplicates(subset="Datei", keep="first")
+    files_old = files_old["Datei"].values.tolist()
+    files_new = []
+    for file in files_old:
+        animals = []
+        contact = ""
+        intra = ""
+        # get all animals and the Contact info
+        for index, row in df.iterrows():
+            if row["Intra"] != "?" and  row["Intra"] in file:
+                animals.append(row["Name"])
+                if contact == "":
+                    contact = row["Kontakt"]
+                    intra = row["Intra"]
+
+        if contact == "" or len(animals) == 0 or intra == "":
+            continue
+        all_animals = "_".join(animals)
+        name = contact.split(",")[0]
+        # Intranummer_Tiername_Vorname Nachname
+        new = f"{intra}_{all_animals}_{name}.pdf"
+        files_new.append(new)
+    return files_old, files_new
+
+
+def write_new_file_names(df):
+    old, new = build_file_name(df)
+    # ( nice to have : Dateiname ohne ä,ü,ö und ß -> ersetzen durch ue, ae oe, ss)
+    new = [clean_german(x) for x in new]
+    return old, new
