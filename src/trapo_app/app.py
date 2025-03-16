@@ -24,15 +24,11 @@ def compare():
     print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
     file1 = io_helpers.get_file()
     df1 = io_helpers.read_file(file1)
-    # df1 = io_helpers.read_file("..\\..\\data\\chat.docx")
     print("Gib nun den Pfad zur Datei aus PetOffice ein, z.B. './data/po.docx'")
     file2 = io_helpers.get_file()
     df2 = io_helpers.read_file(file2)
-    # df2 = io_helpers.read_file("..\\..\\data\\po.docx")
-
     print("Vergleiche...")
     df = table_helpers.compare(df1, df2)
-
     writer = pd.ExcelWriter('./Trapo_Vergleich.xlsx')
     df.to_excel(writer, sheet_name='Auto-Vergleich', index=False)
     for column in df:
@@ -46,7 +42,6 @@ def compare():
 def extract():
     print("Gib den Pfad zum Ordner an, in dem alle Traces-Dokumente liegen, z.B. './data/traces'")
     path = io_helpers.get_path()
-    # pdfs = io_helpers.get_all_files(path, ".pdf")
     pdfs = io_helpers.get_files(path, ".pdf")
     if len(pdfs) == 0:
         print("Keine PDFs gefunden")

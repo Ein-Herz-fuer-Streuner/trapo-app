@@ -86,6 +86,8 @@ def clean_contact(contact):
 def clean_location(loc):
     return loc.replace("\n", " ")
 
+def chip_to_str(chip):
+    return str(chip)
 
 def prep_work(df1, df2):
     df1 = clean_compare_table(df1)
@@ -203,17 +205,19 @@ def compare(df1, df2):
 
 
 def compare_traces(df1, df2):
+    df1["Chip"] = df1["Chip"].apply(chip_to_str)
+    df2["Chip"] = df2["Chip"].apply(chip_to_str)
     differences = []
     # Check df1 against df2
     # df1: Name, Ort, Chip, DOB, Kontakt, Differenz (Chat \u2192 PetOffice)
     # df2: Datei, Intra, Chip, Kontakt
     for index, row in df1.iterrows():
-        matched_row = []
+        matched_row = pd.Series()
         if row["Chip"] in df2["Chip"].values:
             matched_row = df2[df2["Chip"] == row["Chip"]].iloc[0]
         elif row["Differenz"] in df2["Chip"].values:
             matched_row = df2[df2["Chip"] == row["Differenz"]].iloc[0]
-        if matched_row:
+        if not matched_row.empty:
             diffs = []
             if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
                 diffs.append(
@@ -225,12 +229,12 @@ def compare_traces(df1, df2):
                                 "Differenz (Chat \u2192 Traces)": difference})
         else:
             differences.append(
-                {"Name": row["Name"], "Chip": row["Chip"], "Kontakt": row["Kontakt"], "Intra": "?", "Datei": "?",
+                {"Name": row["Name"], "Chip": str(row["Chip"]), "Kontakt": row["Kontakt"], "Intra": "?", "Datei": "?",
                  "Differenz (Chat \u2192 Traces)": "Fehlt in Traces-Dokumenten"})
 
     # Compare df2 against df1 for missing names
     for index, row in df2.iterrows():
-        if row["Chip"] not in df1["Chip"].values or row["Chip"] not in df1["Differenz"].values:
+        if row["Chip"] not in df1["Chip"].values and row["Chip"] not in df1["Differenz"].values:
             differences.append(
                 {"Name": "?", "Ort": "?", "Chip": str(row["Chip"]), "DOB": "?", "Kontakt": row["Kontakt"],
                  "Intra": row["Intra"], "Datei": row["Datei"],
@@ -244,6 +248,7 @@ def compare_traces(df1, df2):
 def build_file_name(df):
     files_old = df.drop_duplicates(subset="Datei", keep="first")
     files_old = files_old["Datei"].values.tolist()
+    files_old = [x for x in files_old if not x in ["", "?"]]
     files_new = []
     for file in files_old:
         animals = []

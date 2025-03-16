@@ -48,15 +48,19 @@ def extract_table_data(files):
                 row = row.split("Name ")[1]
                 row = row.split(" ISO")[0]
                 row = row.replace(" Adresse ", ";")
-                match = re.match(r"(.+);(.*\d+\s?[a-z]?)\s(\d{4,}\s.+)", row)
+                match = re.match(r"(.+);(.*\d+\s?[a-zA-Z]?)\s(\d{4,}\s.+)", row)
+                if not match:
+                    print("Fehler bei Datei und Zeile:", file, row)
+                    continue
                 row = match.group(1) + ", " + match.group(2) + ", " + match.group(3)
                 contact = row
             elif "Identifikationsnummer" in row:
-                row = row.replace("Identifikationsnummer ", "")
+                row = row.split("Identifikationsnummer ")[1]
+                row = row.replace("Microchip ", "")
                 chips.append(row)
 
         for chip in chips:
-            results.append([file, intra, chip, contact])
+            results.append([file, intra, str(chip), contact])
 
     return results
 

@@ -18,6 +18,8 @@ def get_file():
     path = ""
     while not is_valid:
         path = str(input("Bitte gib den Pfad zu einer Datei (.xlsx, .csv, .docx) ein:"))
+        path = path.replace("\"", "")
+        path = path.replace("'", "")
         if path.endswith(".xlsx") or path.endswith(".csv") or path.endswith(".docx"):
             is_valid = True
     path = os.path.abspath(path)
