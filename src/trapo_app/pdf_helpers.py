@@ -1,4 +1,5 @@
 import re
+import sys
 
 import camelot
 import ftfy
@@ -14,7 +15,12 @@ def get_table_data(files):
     rows_per_file = []
     for file in files:
         rows = []
-        tbls = camelot.read_pdf(file, pages="1-2", flavor="lattice", backend="pdfium", line_scale=20)
+        tbls = []
+        try:
+            tbls = camelot.read_pdf(file, pages="1-2", flavor="lattice", backend="pdfium", line_scale=20)
+        except Exception as err:
+            print("Etwas ist beim PDF einlesen schief gegangen:", err)
+            sys.exit(1)
         for tab in tbls:
             tab = tab.df
             for i, row in tab.iterrows():
@@ -69,5 +75,5 @@ def extract_traces(files):
     cols = ["Datei", "Intra", "Chip", "Kontakt"]
     results = extract_table_data(files)
     df_result = pd.DataFrame(results, columns=cols)
-    df_result = df_result.sort_values('Kontakt')
+    df_result = df_result.sort_values(['Kontakt', 'Chip'])
     return df_result

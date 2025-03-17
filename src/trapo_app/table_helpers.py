@@ -1,6 +1,8 @@
 import re
 import string
+import sys
 
+import dateutil.parser
 import pandas as pd
 from dateutil import parser
 from thefuzz import fuzz
@@ -54,7 +56,14 @@ def clean_name(name):
 def clean_dob(dob):
     if dob == "":
         return ""
-    return parser.parse(dob, dayfirst=True).strftime("%d.%m.%Y")
+    try:
+        dob = parser.parse(dob, dayfirst=True).strftime("%d.%m.%Y")
+    # TODO try all other possible formats before quitting the job
+    except dateutil.parser.ParserError as err:
+        print("Oh oh, da ist ein Datum nicht richtig formatiert", err)
+        print("Bitte korrigieren und diesen Befehl neustarten.")
+        sys.exit(1)
+    return dob
 
 
 def clean_contact(contact):
@@ -90,6 +99,11 @@ def chip_to_str(chip):
     return str(chip)
 
 def prep_work(df1, df2):
+   # avoid bs results
+    if not "Kontakt" in list(df1.columns):
+        print("Bitte die Spalte mit den Adoptantendaten in 'Kontakt' umbennen und diesen Befehl neustarten.")
+        sys.exit(1)
+
     df1 = clean_compare_table(df1)
     df1['Name'] = df1['Name'].apply(clean_name)
     df1['DOB'] = df1['DOB'].apply(clean_dob)
@@ -103,6 +117,9 @@ def prep_work(df1, df2):
     df2['Kontakt'] = df2['Kontakt'].apply(clean_contact)
     if 'Ort' in df2.columns:
         df2["Ort"] = df2["Ort"].apply(clean_location)
+    # avoid mix up if two animals have the same name
+    df1 = df1.sort_values(['Name', 'Chip'])
+    df2 = df2.sort_values(['Name', 'Chip'])
     return df1, df2
 
 
@@ -157,7 +174,7 @@ def compare_contact(cont1, cont2):
                 if short_city1[0].strip() != short_city2[0].strip():
                     return False
             case _:
-                print("Oh oh, hier ist was schief gelaufen")
+                print("Oh oh, hier ist was schief gelaufen, bitte überprüfen und neustarten:", cont1, cont2)
     return True
 
 
@@ -200,7 +217,7 @@ def compare(df1, df2):
 
     # Result DataFrame
     df_result = pd.DataFrame(differences)
-    df_result = df_result.sort_values('Name')
+    df_result = df_result.sort_values(['Name', 'Chip'])
     return df_result
 
 
@@ -241,7 +258,7 @@ def compare_traces(df1, df2):
                  "Differenz (Chat \u2192 Traces)": "Fehlt in Chat-Datei"})
     # Result DataFrame
     df_result = pd.DataFrame(differences)
-    df_result = df_result.sort_values('Name')
+    df_result = df_result.sort_values(['Name', 'Chip'])
     return df_result
 
 
