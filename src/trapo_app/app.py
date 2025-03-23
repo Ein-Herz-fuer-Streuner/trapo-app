@@ -23,11 +23,13 @@ def main():
 def compare():
     print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
     print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
-    file1 = io_helpers.get_file()
-    df1 = io_helpers.read_file(file1)
+    #file1 = io_helpers.get_file()
+    #df1 = io_helpers.read_file(file1)
+    df1 = io_helpers.read_file("/Users/sarah/Dokumente/Entwicklung/EHfS/trapo-app/data/chatNeu.docx")
     print("Gib nun den Pfad zur Datei aus PetOffice ein, z.B. './data/po.docx'")
-    file2 = io_helpers.get_file()
-    df2 = io_helpers.read_file(file2)
+    #file2 = io_helpers.get_file()
+    #df2 = io_helpers.read_file(file2)
+    df2 = io_helpers.read_file("/Users/sarah/Dokumente/Entwicklung/EHfS/trapo-app/data/poNeu.docx")
     print("Vergleiche...")
     df = table_helpers.compare(df1, df2)
     path = os.path.abspath(os.path.join(".", "Trapo_Vergleich.xlsx"))
@@ -103,4 +105,5 @@ def do_all():
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
 
 if __name__ == "__main__":
-    main()
+    #main()
+    compare()

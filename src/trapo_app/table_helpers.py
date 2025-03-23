@@ -27,6 +27,7 @@ replace_dict = {
     "( Österreich)": "",
     "  ": " ",
     "und": "&",
+    "Und": "&",
     "u.": "&",
 }
 
@@ -63,7 +64,8 @@ def clean_dob(dob):
     # try different formats before giving up
     for fmt in ('%d.%m.%Y', '%d.%m.%y', '%d.%m %Y', '%d.%m %y', '%d %m.%Y', '%d %m %Y', '%d %m.%y', '%d %m %y', '%d/%m/%Y'):
         try:
-            return datetime.strptime(dob, fmt)
+            tmp = datetime.strptime(dob, fmt)
+            return tmp.strftime('%d.%m.%Y')
         except ValueError:
            pass
     # none matched
@@ -126,8 +128,10 @@ def prep_work(df1, df2):
     if 'Ort' in df2.columns:
         df2["Ort"] = df2["Ort"].apply(clean_location)
     # avoid mix up if two animals have the same name
-    df1 = df1.sort_values(['Name', 'Chip'])
-    df2 = df2.sort_values(['Name', 'Chip'])
+    df1 = df1.sort_values('Name')
+    df1 = df1.reset_index(drop=True)
+    df2 = df2.sort_values('Name')
+    df2 = df2.reset_index(drop=True)
     return df1, df2
 
 
@@ -136,6 +140,9 @@ def compare_contact(cont1, cont2):
     split2 = cont2.split(",")
     if len(split1) != len(split2):
         return False
+    if len(split1) > 3:
+        del split1[1]
+        del split2[1]
     for i, (s1, s2) in enumerate(zip(split1, split2)):
         s1 = s1.strip()
         s2 = s2.strip()
@@ -192,12 +199,12 @@ def match_pet(row, df):
         if name == name_comp:
             count += 1
     if count == 1:
-        return df[df["Name"] == row["Name"]].iloc[0]
+        return df[df["Name"] == name].iloc[0]
     # if more than one or none, check by chip
     chip  = row["Chip"]
     for chip_comp in df["Chip"].values:
         if chip == chip_comp:
-            return df[df["Chip"] == row["Chip"]].iloc[0]
+            return df[df["Chip"] == chip].iloc[0]
     return pd.Series()
 
 def compare(df1, df2):
@@ -236,7 +243,7 @@ def compare(df1, df2):
         # Compare df2 against df1 for missing names
         for index, row in df2.iterrows():
             matched_row = match_pet(row, df1)
-            if not matched_row.empty:
+            if matched_row.empty:
                 differences.append(
                     {"Name": row["Name"], "Ort": "?", "Chip": row["Chip"], "DOB": row["DOB"], "Kontakt": row["Kontakt"],
                      "Differenz (Chat \u2192 PetOffice)": "Fehlt in Chat-Datei"})
