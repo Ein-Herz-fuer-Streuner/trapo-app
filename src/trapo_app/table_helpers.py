@@ -97,6 +97,7 @@ def clean_contact(contact):
     finished = finished.replace("  ", " ")
     finished = finished.replace(",,", ",")
     finished = finished.strip()
+    # TODO am Ende ,.\s entfernen
     return finished
 
 
@@ -139,6 +140,7 @@ def compare_contact(cont1, cont2):
     split1 = cont1.split(",")
     split2 = cont2.split(",")
     if len(split1) != len(split2):
+        # TODO if Tierheim -> make ok
         return False
     if len(split1) > 3:
         del split1[1]
@@ -151,6 +153,7 @@ def compare_contact(cont1, cont2):
                 if fuzz.ratio(s1, s2) < 99:
                     # Tom Man and Tina Woman would match
                     # Tom and Martina Man would not
+                    # TODO split and check if all in other
                     if not s1 in s2 and not s2 in s1:
                         return False
             case 1:
