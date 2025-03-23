@@ -1,4 +1,5 @@
 #!/bin/python3.13
+import os.path
 import sys
 import pandas as pd
 
@@ -29,14 +30,15 @@ def compare():
     df2 = io_helpers.read_file(file2)
     print("Vergleiche...")
     df = table_helpers.compare(df1, df2)
-    writer = pd.ExcelWriter('./Trapo_Vergleich.xlsx')
+    path = os.path.abspath(os.path.join(".", "Trapo_Vergleich.xlsx"))
+    writer = pd.ExcelWriter(path)
     df.to_excel(writer, sheet_name='Auto-Vergleich', index=False)
     for column in df:
         column_length = max(df[column].astype(str).map(len).max(), len(column))
         col_idx = df.columns.get_loc(column)
         writer.sheets['Auto-Vergleich'].set_column(col_idx, col_idx, column_length)
     writer.close()
-    print("Fertig! Die Vergleichsdatei liegt unter './Trapo_Vergleich.xlsx'")
+    print(f"Fertig! Die Vergleichsdatei liegt unter '{path}'")
 
 
 def extract():
@@ -48,14 +50,15 @@ def extract():
         sys.exit(1)
     print("Extrahiere Informationen... Das kann etwas dauern...")
     df = pdf_helpers.extract_traces(pdfs)
-    writer = pd.ExcelWriter('./Traces_Extrakt.xlsx')
+    path = os.path.abspath(os.path.join(".", "Traces_Extrakt.xlsx"))
+    writer = pd.ExcelWriter(path)
     df.to_excel(writer, sheet_name='Traces', index=False)
     for column in df:
         column_length = max(df[column].astype(str).map(len).max(), len(column))
         col_idx = df.columns.get_loc(column)
         writer.sheets['Traces'].set_column(col_idx, col_idx, column_length)
     writer.close()
-    print("Fertig! Die Vergleichsdatei liegt unter './Traces_Extrakt.xlsx'")
+    print(f"Fertig! Die Datei liegt unter '{path}'")
 
 def compare_with_traces():
     print("Gib als erstes den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Vergleich.xlsx'")
@@ -66,14 +69,15 @@ def compare_with_traces():
     df2 = io_helpers.read_file(file2)
     print("Vergleiche...")
     df = table_helpers.compare_traces(df1, df2)
-    writer = pd.ExcelWriter('./Trapo_Traces_Vergleich.xlsx')
+    path = os.path.abspath(os.path.join(".", "Trapo_Traces_Vergleich.xlsx"))
+    writer = pd.ExcelWriter(path)
     df.to_excel(writer, sheet_name='Traces-Vergleich', index=False)
     for column in df:
         column_length = max(df[column].astype(str).map(len).max(), len(column))
         col_idx = df.columns.get_loc(column)
         writer.sheets['Traces-Vergleich'].set_column(col_idx, col_idx, column_length)
     writer.close()
-    print("Fertig! Die Vergleichsdatei liegt unter './Trapo_Traces_Vergleich.xlsx'")
+    print(f"Fertig! Die Vergleichsdatei liegt unter '{path}'")
 
 def rename():
     print("Gib nun den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Traces_Vergleich.xlsx'")
@@ -91,7 +95,8 @@ def distance():
     df1 = io_helpers.read_file(file1)
     print("Berechne Anfahrten...")
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
-    print("Fertig! Die Datei liegt unter './Kennzeichen_sortiert.xlsx'")
+    path = os.path.abspath(os.path.join(".", "Trapo_Kennzeichen.xlsx"))
+    print(f"Fertig! Die Datei liegt unter '{path}'")
 
 
 def do_all():

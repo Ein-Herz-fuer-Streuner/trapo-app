@@ -95,13 +95,15 @@ def clean_contact(contact):
 def clean_location(loc):
     return loc.replace("\n", " ")
 
+
 def chip_to_str(chip):
     return str(chip)
 
+
 def prep_work(df1, df2):
-   # avoid bs results
+    # avoid bs results
     if not "Kontakt" in list(df1.columns):
-        print("Bitte die Spalte mit den Adoptantendaten in 'Kontakt' umbennen und diesen Befehl neustarten.")
+        print("Bitte die Spalte mit den Adoptantendaten in 'Kontakt' umbenennen und diesen Befehl neustarten.")
         sys.exit(1)
 
     df1 = clean_compare_table(df1)
@@ -175,6 +177,7 @@ def compare_contact(cont1, cont2):
                     return False
             case _:
                 print("Oh oh, hier ist was schief gelaufen, bitte überprüfen und neustarten:", cont1, cont2)
+                sys.exit(0)
     return True
 
 
@@ -182,39 +185,46 @@ def compare(df1, df2):
     df1, df2 = prep_work(df1, df2)
 
     differences = []
+    try:
     # Check df1 against df2
-    for index, row in df1.iterrows():
-        if row["Name"] in df2["Name"].values:
-            matched_row = df2[df2["Name"] == row["Name"]].iloc[0]
-            diffs = []
-            if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
-                diffs.append(
-                    f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
+        for index, row in df1.iterrows():
+            if row["Name"] in df2["Name"].values:
+                matched_row = df2[df2["Name"] == row["Name"]].iloc[0]
+                diffs = []
+                if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
+                    diffs.append(
+                        f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
 
-            if row["DOB"] != matched_row["DOB"]:
-                diffs.append(
-                    f"DOB: {row['DOB'] if row['DOB'] != '' else '\'\''} \u2192 {matched_row['DOB'] if matched_row['DOB'] != '' else '\'\''}")
+                if row["DOB"] != matched_row["DOB"]:
+                    diffs.append(
+                        f"DOB: {row['DOB'] if row['DOB'] != '' else '\'\''} \u2192 {matched_row['DOB'] if matched_row['DOB'] != '' else '\'\''}")
 
-            if row["Chip"] != matched_row["Chip"]:
-                diffs.append(
-                    f"Chip: {row['Chip'] if row['Chip'] != '' else '\'\''} \u2192 {matched_row['Chip'] if matched_row['Chip'] != '' else '\'\''}")
+                if row["Chip"] != matched_row["Chip"]:
+                    diffs.append(
+                        f"Chip: {row['Chip'] if row['Chip'] != '' else '\'\''} \u2192 {matched_row['Chip'] if matched_row['Chip'] != '' else '\'\''}")
 
-            difference = ", ".join(diffs) if diffs else "\u2713"
-            differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
-                                "Kontakt": row["Kontakt"],
-                                "Differenz (Chat \u2192 PetOffice)": difference})
-        else:
-            differences.append(
-                {"Name": row["Name"], "Chip": row["Chip"], "Kontakt": row["Kontakt"],
-                 "Differenz (Chat \u2192 PetOffice)": "Fehlt in PetOffice-Datei"})
+                difference = ", ".join(diffs) if diffs else "\u2713"
+                differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
+                                    "Kontakt": row["Kontakt"],
+                                    "Differenz (Chat \u2192 PetOffice)": difference})
+            else:
+                differences.append(
+                    {"Name": row["Name"], "Chip": row["Chip"], "Kontakt": row["Kontakt"],
+                     "Differenz (Chat \u2192 PetOffice)": "Fehlt in PetOffice-Datei"})
+    except KeyError as err:
+        print("Spalte nicht in Tabelle gefunden:", err)
+        sys.exit(0)
 
-    # Compare df2 against df1 for missing names
-    for index, row in df2.iterrows():
-        if row["Name"] not in df1["Name"].values:
-            differences.append(
-                {"Name": row["Name"], "Ort": "?", "Chip": row["Chip"], "DOB": row["DOB"], "Kontakt": row["Kontakt"],
-                 "Differenz (Chat \u2192 PetOffice)": "Fehlt in Chat-Datei"})
-
+    try:
+        # Compare df2 against df1 for missing names
+        for index, row in df2.iterrows():
+            if row["Name"] not in df1["Name"].values:
+                differences.append(
+                    {"Name": row["Name"], "Ort": "?", "Chip": row["Chip"], "DOB": row["DOB"], "Kontakt": row["Kontakt"],
+                     "Differenz (Chat \u2192 PetOffice)": "Fehlt in Chat-Datei"})
+    except KeyError as err:
+        print("Spalte nicht in Tabelle gefunden:", err)
+        sys.exit(0)
     # Result DataFrame
     df_result = pd.DataFrame(differences)
     df_result = df_result.sort_values(['Name', 'Chip'])
@@ -228,6 +238,7 @@ def get_diff_col_name(cols):
             return c
     return col
 
+
 def compare_traces(df1, df2):
     df1["Chip"] = df1["Chip"].apply(chip_to_str)
     df2["Chip"] = df2["Chip"].apply(chip_to_str)
@@ -239,34 +250,41 @@ def compare_traces(df1, df2):
     # Check df1 against df2
     # df1: Name, Ort, Chip, DOB, Kontakt, Differenz (Chat \u2192 PetOffice)
     # df2: Datei, Intra, Chip, Kontakt
-    for index, row in df1.iterrows():
-        matched_row = pd.Series()
-        if row["Chip"] in df2["Chip"].values:
-            matched_row = df2[df2["Chip"] == row["Chip"]].iloc[0]
-        elif row[diff_column] in df2["Chip"].values:
-            matched_row = df2[df2["Chip"] == row[diff_column]].iloc[0]
-        if not matched_row.empty:
-            diffs = []
-            if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
-                diffs.append(
-                    f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
+    try:
+        for index, row in df1.iterrows():
+            matched_row = pd.Series()
+            if row["Chip"] in df2["Chip"].values:
+                matched_row = df2[df2["Chip"] == row["Chip"]].iloc[0]
+            elif row[diff_column] in df2["Chip"].values:
+                matched_row = df2[df2["Chip"] == row[diff_column]].iloc[0]
+            if not matched_row.empty:
+                diffs = []
+                if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
+                    diffs.append(
+                        f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
 
-            difference = ", ".join(diffs) if diffs else "\u2713"
-            differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
-                                "Kontakt": row["Kontakt"], "Intra": matched_row["Intra"], "Datei": matched_row["Datei"],
-                                "Differenz (Chat \u2192 Traces)": difference})
-        else:
-            differences.append(
-                {"Name": row["Name"], "Chip": str(row["Chip"]), "Kontakt": row["Kontakt"], "Intra": "?", "Datei": "?",
-                 "Differenz (Chat \u2192 Traces)": "Fehlt in Traces-Dokumenten"})
-
+                difference = ", ".join(diffs) if diffs else "\u2713"
+                differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
+                                    "Kontakt": row["Kontakt"], "Intra": matched_row["Intra"], "Datei": matched_row["Datei"],
+                                    "Differenz (Chat \u2192 Traces)": difference})
+            else:
+                differences.append(
+                    {"Name": row["Name"], "Chip": str(row["Chip"]), "Kontakt": row["Kontakt"], "Intra": "?", "Datei": "?",
+                     "Differenz (Chat \u2192 Traces)": "Fehlt in Traces-Dokumenten"})
+    except KeyError as err:
+        print("Spalte nicht in Tabelle gefunden:", err)
+        sys.exit(0)
     # Compare df2 against df1 for missing names
-    for index, row in df2.iterrows():
-        if row["Chip"] not in df1["Chip"].values and row["Chip"] not in df1[diff_column].values:
-            differences.append(
-                {"Name": "?", "Ort": "?", "Chip": str(row["Chip"]), "DOB": "?", "Kontakt": row["Kontakt"],
-                 "Intra": row["Intra"], "Datei": row["Datei"],
-                 "Differenz (Chat \u2192 Traces)": "Fehlt in Chat-Datei"})
+    try:
+        for index, row in df2.iterrows():
+            if row["Chip"] not in df1["Chip"].values and row["Chip"] not in df1[diff_column].values:
+                differences.append(
+                    {"Name": "?", "Ort": "?", "Chip": str(row["Chip"]), "DOB": "?", "Kontakt": row["Kontakt"],
+                     "Intra": row["Intra"], "Datei": row["Datei"],
+                     "Differenz (Chat \u2192 Traces)": "Fehlt in Chat-Datei"})
+    except KeyError as err:
+        print("Spalte nicht in Tabelle gefunden:", err)
+        sys.exit(0)
     # Result DataFrame
     df_result = pd.DataFrame(differences)
     df_result = df_result.sort_values(['Name', 'Chip'])
@@ -284,7 +302,7 @@ def build_file_name(df):
         intra = ""
         # get all animals and the Contact info
         for index, row in df.iterrows():
-            if row["Intra"] != "?" and  row["Intra"] in file:
+            if row["Intra"] != "?" and row["Intra"] in file:
                 animals.append(row["Name"])
                 if contact == "":
                     contact = row["Kontakt"]
