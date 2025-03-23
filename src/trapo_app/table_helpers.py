@@ -1,6 +1,7 @@
 import re
 import string
 import sys
+from datetime import datetime
 
 import dateutil.parser
 import pandas as pd
@@ -25,6 +26,8 @@ replace_dict = {
     "(Österreich)": "",
     "( Österreich)": "",
     "  ": " ",
+    "und": "&",
+    "u.": "&",
 }
 
 german_char_map = {ord('ä'): 'ae', ord('ü'): 'ue', ord('ö'): 'oe', ord('ß'): 'ss'}
@@ -49,21 +52,24 @@ def clean_german(cell):
 
 
 def clean_name(name):
-    name = name.lower().replace("box change", "").replace("box delivery", "").strip()
+    name = name.lower()
+    name = re.sub(r"box\s?(change)?!?", "", name).strip()
     return string.capwords(name)
 
 
 def clean_dob(dob):
     if dob == "":
         return ""
-    try:
-        dob = parser.parse(dob, dayfirst=True).strftime("%d.%m.%Y")
-    # TODO try all other possible formats before quitting the job
-    except dateutil.parser.ParserError as err:
-        print("Oh oh, da ist ein Datum nicht richtig formatiert", err)
-        print("Bitte korrigieren und diesen Befehl neustarten.")
-        sys.exit(1)
-    return dob
+    # try different formats before giving up
+    for fmt in ('%d.%m.%Y', '%d.%m.%y', '%d.%m %Y', '%d.%m %y', '%d %m.%Y', '%d %m %Y', '%d %m.%y', '%d %m %y', '%d/%m/%Y'):
+        try:
+            return datetime.strptime(dob, fmt)
+        except ValueError:
+           pass
+    # none matched
+    print("Oh oh, da ist ein Datum nicht richtig formatiert:", dob)
+    print("Bitte korrigieren und diesen Befehl neustarten.")
+    sys.exit(1)
 
 
 def clean_contact(contact):
@@ -141,10 +147,8 @@ def compare_contact(cont1, cont2):
                     if not s1 in s2 and not s2 in s1:
                         return False
             case 1:
-                ss1 = s1.split(" ")
-                ss2 = s2.split(" ")
-                str1 = " ".join(ss1[:-1]).strip()
-                str2 = " ".join(ss2[:-1]).strip()
+                ss1 = re.match(r"(\D+)\s*(\d+)?", s1).group(1).strip()
+                ss2 = re.match(r"(\D+)\s*(\d+)?", s2).group(1).strip()
                 if len(ss1) != len(ss2):
                     return False
                 if len(ss1) == 1:
@@ -152,7 +156,7 @@ def compare_contact(cont1, cont2):
                 no1 = re.search(r'\d+', s1)
                 no2 = re.search(r'\d+', s2)
                 # Street has to match
-                if str1 != str2:
+                if ss1 != ss2:
                     return False
                 # Hausnummer has to match (9a vs 9 is ok)
                 if not no1 or not no2:
@@ -180,28 +184,41 @@ def compare_contact(cont1, cont2):
                 sys.exit(0)
     return True
 
+def match_pet(row, df):
+    name = row["Name"]
+    count = 0
+    # first check by name
+    for name_comp in df["Name"].values:
+        if name == name_comp:
+            count += 1
+    if count == 1:
+        return df[df["Name"] == row["Name"]].iloc[0]
+    # if more than one or none, check by chip
+    chip  = row["Chip"]
+    for chip_comp in df["Chip"].values:
+        if chip == chip_comp:
+            return df[df["Chip"] == row["Chip"]].iloc[0]
+    return pd.Series()
 
 def compare(df1, df2):
     df1, df2 = prep_work(df1, df2)
 
     differences = []
     try:
-    # Check df1 against df2
+        # Check df1 against df2
         for index, row in df1.iterrows():
-            if row["Name"] in df2["Name"].values:
-                matched_row = df2[df2["Name"] == row["Name"]].iloc[0]
+            matched_row = match_pet(row, df2)
+            if not matched_row.empty:
                 diffs = []
-                if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
-                    diffs.append(
-                        f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
-
-                if row["DOB"] != matched_row["DOB"]:
-                    diffs.append(
-                        f"DOB: {row['DOB'] if row['DOB'] != '' else '\'\''} \u2192 {matched_row['DOB'] if matched_row['DOB'] != '' else '\'\''}")
-
                 if row["Chip"] != matched_row["Chip"]:
                     diffs.append(
                         f"Chip: {row['Chip'] if row['Chip'] != '' else '\'\''} \u2192 {matched_row['Chip'] if matched_row['Chip'] != '' else '\'\''}")
+                if row["DOB"] != matched_row["DOB"]:
+                    diffs.append(
+                        f"DOB: {row['DOB'] if row['DOB'] != '' else '\'\''} \u2192 {matched_row['DOB'] if matched_row['DOB'] != '' else '\'\''}")
+                if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
+                    diffs.append(
+                        f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
 
                 difference = ", ".join(diffs) if diffs else "\u2713"
                 differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
@@ -218,7 +235,8 @@ def compare(df1, df2):
     try:
         # Compare df2 against df1 for missing names
         for index, row in df2.iterrows():
-            if row["Name"] not in df1["Name"].values:
+            matched_row = match_pet(row, df1)
+            if not matched_row.empty:
                 differences.append(
                     {"Name": row["Name"], "Ort": "?", "Chip": row["Chip"], "DOB": row["DOB"], "Kontakt": row["Kontakt"],
                      "Differenz (Chat \u2192 PetOffice)": "Fehlt in Chat-Datei"})
@@ -265,11 +283,13 @@ def compare_traces(df1, df2):
 
                 difference = ", ".join(diffs) if diffs else "\u2713"
                 differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
-                                    "Kontakt": row["Kontakt"], "Intra": matched_row["Intra"], "Datei": matched_row["Datei"],
+                                    "Kontakt": row["Kontakt"], "Intra": matched_row["Intra"],
+                                    "Datei": matched_row["Datei"],
                                     "Differenz (Chat \u2192 Traces)": difference})
             else:
                 differences.append(
-                    {"Name": row["Name"], "Chip": str(row["Chip"]), "Kontakt": row["Kontakt"], "Intra": "?", "Datei": "?",
+                    {"Name": row["Name"], "Chip": str(row["Chip"]), "Kontakt": row["Kontakt"], "Intra": "?",
+                     "Datei": "?",
                      "Differenz (Chat \u2192 Traces)": "Fehlt in Traces-Dokumenten"})
     except KeyError as err:
         print("Spalte nicht in Tabelle gefunden:", err)
