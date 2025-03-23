@@ -221,10 +221,21 @@ def compare(df1, df2):
     return df_result
 
 
+def get_diff_col_name(cols):
+    col = ""
+    for c in cols:
+        if "Differenz" in c:
+            return c
+    return col
+
 def compare_traces(df1, df2):
     df1["Chip"] = df1["Chip"].apply(chip_to_str)
     df2["Chip"] = df2["Chip"].apply(chip_to_str)
     differences = []
+    diff_column = get_diff_col_name(list(df1.columns))
+    if diff_column == "":
+        print("Kein Spaltennamen mit 'Differenz' gefunden")
+        sys.exit(0)
     # Check df1 against df2
     # df1: Name, Ort, Chip, DOB, Kontakt, Differenz (Chat \u2192 PetOffice)
     # df2: Datei, Intra, Chip, Kontakt
@@ -232,8 +243,8 @@ def compare_traces(df1, df2):
         matched_row = pd.Series()
         if row["Chip"] in df2["Chip"].values:
             matched_row = df2[df2["Chip"] == row["Chip"]].iloc[0]
-        elif row["Differenz"] in df2["Chip"].values:
-            matched_row = df2[df2["Chip"] == row["Differenz"]].iloc[0]
+        elif row[diff_column] in df2["Chip"].values:
+            matched_row = df2[df2["Chip"] == row[diff_column]].iloc[0]
         if not matched_row.empty:
             diffs = []
             if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
@@ -251,7 +262,7 @@ def compare_traces(df1, df2):
 
     # Compare df2 against df1 for missing names
     for index, row in df2.iterrows():
-        if row["Chip"] not in df1["Chip"].values and row["Chip"] not in df1["Differenz"].values:
+        if row["Chip"] not in df1["Chip"].values and row["Chip"] not in df1[diff_column].values:
             differences.append(
                 {"Name": "?", "Ort": "?", "Chip": str(row["Chip"]), "DOB": "?", "Kontakt": row["Kontakt"],
                  "Intra": row["Intra"], "Datei": row["Datei"],

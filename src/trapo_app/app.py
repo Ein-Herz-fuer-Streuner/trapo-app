@@ -16,7 +16,7 @@ def main():
     print("- trapo-traces-vergleich: Vergleicht die extrahierten Traces-Daten sie mit einer Tabelle")
     print("- trapo-traces: Benennt Traces Dokumente um")
     print("- trapo-kennzeichen: Sortiert eine Tabelle nach Entfernungen der angegeben Adressen")
-    print("- trapo-komplett: Macht alles aufeinmal! Ein Start, eine Datei am Ende, alles erledigt!")
+    print("- trapo-komplett: Macht alles auf einmal! Ein Start, eine Datei am Ende, alles erledigt!")
 
 
 def compare():
