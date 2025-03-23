@@ -3,9 +3,7 @@ import string
 import sys
 from datetime import datetime
 
-import dateutil.parser
 import pandas as pd
-from dateutil import parser
 from thefuzz import fuzz
 
 phone_regex = r'[\+0-9\/\s-]{8,}'
