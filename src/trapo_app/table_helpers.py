@@ -94,8 +94,8 @@ def clean_contact(contact):
     finished = ", ".join(result)
     finished = finished.replace("  ", " ")
     finished = finished.replace(",,", ",")
+    finished = re.sub(r'\W+$', '', finished)
     finished = finished.strip()
-    # TODO am Ende ,.\s entfernen
     return finished
 
 
@@ -135,11 +135,13 @@ def prep_work(df1, df2):
 
 
 def compare_contact(cont1, cont2):
+    reasons = []
+    is_same = True
     split1 = cont1.split(",")
     split2 = cont2.split(",")
     if len(split1) != len(split2):
         # TODO if Tierheim -> make ok
-        return False
+        return False, ["Länge"]
     if len(split1) > 3:
         del split1[1]
         del split2[1]
@@ -153,24 +155,34 @@ def compare_contact(cont1, cont2):
                     # Tom and Martina Man would not
                     # TODO split and check if all in other
                     if not s1 in s2 and not s2 in s1:
-                        return False
+                        is_same = False
+                        reasons.append("Name")
+                        continue
             case 1:
                 ss1 = re.match(r"(\D+)\s*(\d+)?", s1).group(1).strip()
                 ss2 = re.match(r"(\D+)\s*(\d+)?", s2).group(1).strip()
                 if len(ss1) != len(ss2):
-                    return False
+                    is_same = False
+                    reasons.append("Straße")
+                    continue
                 if len(ss1) == 1:
                     continue
                 no1 = re.search(r'\d+', s1)
                 no2 = re.search(r'\d+', s2)
                 # Street has to match
                 if ss1 != ss2:
-                    return False
+                    is_same = False
+                    reasons.append("Straße")
+                    continue
                 # Hausnummer has to match (9a vs 9 is ok)
                 if not no1 or not no2:
-                    return False
+                    is_same = False
+                    reasons.append("HNr")
+                    continue
                 if no1.group(0) != no2.group(0):
-                    return False
+                    is_same = False
+                    reasons.append("HNr")
+                    continue
 
             case 2:
                 ss1 = s1.split(" ")
@@ -181,16 +193,19 @@ def compare_contact(cont1, cont2):
                 city2 = ss2[1].strip()
                 # Post code has to be an exact match
                 if plz1 != plz2:
-                    return False
+                    is_same = False
+                    reasons.append("Plz")
                 # Rothenburg & Rothenburg ob der Tauber have to match
                 short_city1 = city1.split(" ")
                 short_city2 = city2.split(" ")
                 if short_city1[0].strip() != short_city2[0].strip():
-                    return False
+                    is_same = False
+                    reasons.append("Stadt")
+                    continue
             case _:
                 print("Oh oh, hier ist was schief gelaufen, bitte überprüfen und neustarten:", cont1, cont2)
                 sys.exit(0)
-    return True
+    return is_same, reasons
 
 def match_pet(row, df):
     name = row["Name"]
@@ -224,9 +239,10 @@ def compare(df1, df2):
                 if row["DOB"] != matched_row["DOB"]:
                     diffs.append(
                         f"DOB: {row['DOB'] if row['DOB'] != '' else '\'\''} \u2192 {matched_row['DOB'] if matched_row['DOB'] != '' else '\'\''}")
-                if not compare_contact(row["Kontakt"], matched_row["Kontakt"]):
+                is_same, reasons = compare_contact(row["Kontakt"], matched_row["Kontakt"])
+                if not is_same:
                     diffs.append(
-                        f"Kontakt: {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
+                        f"Kontakt ({", ".join(reasons)}): {row['Kontakt'] if row['Kontakt'] != '' else '\'\''} \u2192 {matched_row['Kontakt'] if matched_row['Kontakt'] != '' else ''}")
 
                 difference = ", ".join(diffs) if diffs else "\u2713"
                 differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
