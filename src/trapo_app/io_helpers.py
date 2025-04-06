@@ -1,10 +1,13 @@
 import os
+from pathlib import Path
+import shutil
 
 import pandas as pd
 from docx import Document
 
 def get_files(dir_, ending):
     pdfs = []
+    dir_ = os.path.abspath(dir_)
     for filename in os.listdir(dir_):
         if filename.endswith(ending):
             full_path = os.path.join(dir_, filename)
@@ -56,6 +59,14 @@ def read_file(path):
     return df
 
 
+def read_files(files):
+    res = []
+    for file in files:
+        tmp = read_file(file)
+        if tmp:
+            res.append(tmp)
+    return res
+
 def iter_unique_cells(cells):
     prior_cell = None
     for c in cells:
@@ -85,3 +96,21 @@ def rename_files(col_old, col_new):
         dir, file = os.path.split(old)
         new_path = os.path.join(dir, new)
         os.rename(old, new_path)
+
+def create_folders(df):
+    files_old = df.drop_duplicates(subset="Kennzeichen", keep="first")
+    files_old = files_old["Datei"].values.tolist()
+    files_old = [x for x in files_old if not x in ["", "?"]]
+    for path in files_old:
+        path = os.path.join(".", path)
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+def move_files(df):
+    for row in df.itertuples():
+        file_ = row["Datei neu"]
+        dir, file = os.path.split(file_)
+        new_path = os.path.join(".", row["Kennzeichen"], file)
+        shutil.move(file_, new_path)
+
+def filter_stopps(files):
+    return [x for x in files if s in str.lower(x) for s in ["nord", "süd", "sued", "südwest", "suedwest", "mitte"]]

@@ -340,6 +340,7 @@ def build_file_name(df):
     files_old = files_old["Datei"].values.tolist()
     files_old = [x for x in files_old if not x in ["", "?"]]
     files_new = []
+    df["Datei neu"] = ""
     for file in files_old:
         animals = []
         contact = ""
@@ -359,11 +360,18 @@ def build_file_name(df):
         # Intranummer_Tiername_Vorname Nachname
         new = f"{intra}_{all_animals}_{name}.pdf"
         files_new.append(new)
-    return files_old, files_new
+    # save new file name for moving
+    df["Datei neu"] = df["Datei"].apply(match_old_new, args=(files_old, files_new))
+    return df, files_old, files_new
 
+def match_old_new(cell, old, new):
+    for o, n in zip(old, new):
+        if cell == o:
+            return n
+    return ""
 
 def write_new_file_names(df):
-    old, new = build_file_name(df)
+    df, old, new = build_file_name(df)
     # ( nice to have : Dateiname ohne ä,ü,ö und ß -> ersetzen durch ue, ae oe, ss)
     new = [clean_german(x) for x in new]
-    return old, new
+    return df, old, new

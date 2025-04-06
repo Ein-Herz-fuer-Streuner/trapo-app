@@ -9,6 +9,7 @@ cells_to_keep = [
     "IMSOC",
     "Bestimmungsort ",
     "Identifikationsnummer",
+    "| Rumänien"
 ]
 
 def get_table_data(files):
@@ -44,6 +45,7 @@ def extract_table_data(files):
         intra = ""
         contact = ""
         chips = []
+        kennzeichen = ""
         for row in rows:
             if "IMSOC" in row:
                 row = row.split("Bezugsnummer ")[1]
@@ -64,15 +66,18 @@ def extract_table_data(files):
                 row = row.split("Identifikationsnummer ")[1]
                 row = row.replace("Microchip ", "")
                 chips.append(row)
+            elif "| Rumänien" in row:
+                row = row.split(" |")[0]
+                kennzeichen = row.split(" ")[-1]
 
         for chip in chips:
-            results.append([file, intra, str(chip), contact])
+            results.append([file, intra, str(chip), contact, kennzeichen])
 
     return results
 
 
 def extract_traces(files):
-    cols = ["Datei", "Intra", "Chip", "Kontakt"]
+    cols = ["Datei", "Intra", "Chip", "Kontakt", "Kennzeichen"]
     results = extract_table_data(files)
     df_result = pd.DataFrame(results, columns=cols)
     df_result = df_result.sort_values(['Kontakt', 'Chip'])
