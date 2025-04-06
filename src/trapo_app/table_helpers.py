@@ -104,7 +104,7 @@ def clean_location(loc):
 
 
 def chip_to_str(chip):
-    return str(chip)
+    return str(chip).replace(".0", "")
 
 
 def prep_work(df1, df2):
@@ -309,11 +309,12 @@ def compare_traces(df1, df2):
                 differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
                                     "Kontakt": row["Kontakt"], "Intra": matched_row["Intra"],
                                     "Datei": matched_row["Datei"],
+                                    "Kennzeichen":matched_row["Kennzeichen"],
                                     "Differenz (Chat \u2192 Traces)": difference})
             else:
                 differences.append(
                     {"Name": row["Name"], "Chip": str(row["Chip"]), "Kontakt": row["Kontakt"], "Intra": "?",
-                     "Datei": "?",
+                     "Datei": "?", "Kennzeichen": "?",
                      "Differenz (Chat \u2192 Traces)": "Fehlt in Traces-Dokumenten"})
     except KeyError as err:
         print("Spalte nicht in Tabelle gefunden:", err)
@@ -324,7 +325,7 @@ def compare_traces(df1, df2):
             if row["Chip"] not in df1["Chip"].values and row["Chip"] not in df1[diff_column].values:
                 differences.append(
                     {"Name": "?", "Ort": "?", "Chip": str(row["Chip"]), "DOB": "?", "Kontakt": row["Kontakt"],
-                     "Intra": row["Intra"], "Datei": row["Datei"],
+                     "Intra": row["Intra"], "Datei": row["Datei"], "Kennzeichen": row["Kennzeichen"],
                      "Differenz (Chat \u2192 Traces)": "Fehlt in Chat-Datei"})
     except KeyError as err:
         print("Spalte nicht in Tabelle gefunden:", err)
@@ -374,4 +375,5 @@ def write_new_file_names(df):
     df, old, new = build_file_name(df)
     # ( nice to have : Dateiname ohne ä,ü,ö und ß -> ersetzen durch ue, ae oe, ss)
     new = [clean_german(x) for x in new]
+    df["Datei neu"] = df["Datei neu"].apply(clean_german)
     return df, old, new

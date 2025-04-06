@@ -90,15 +90,15 @@ def rename():
     print("Erstelle Kennzeichen-Ordner und ordne Traces zu...")
     io_helpers.create_folders(df1)
     io_helpers.move_files(df1)
-    print("Gib den Pfad zum Ordner an, in dem die Trapo-Stopp-Dokumente liegen, z.B. './data'")
-    path = io_helpers.get_path()
-    files = io_helpers.get_files(path, ".docx")
-    files = io_helpers.filter_stopps(files)
-    if len(files) == 0:
-        print("Keine .docx-Dateien gefunden")
-        sys.exit(1)
-    all_files = io_helpers.read_files(files)
-    print("Benenne Ordner um nach Stopp...")
+    #print("Gib den Pfad zum Ordner an, in dem die Trapo-Stopp-Dokumente liegen, z.B. './data'")
+    #path = io_helpers.get_path()
+    #files = io_helpers.get_files(path, ".docx")
+    #files = io_helpers.filter_stopps(files)
+    #if len(files) == 0:
+    #    print("Keine .docx-Dateien gefunden")
+    #    sys.exit(1)
+    #all_files = io_helpers.read_files(files)
+    #print("Benenne Ordner um nach Stopp...")
     # TODO
     print("Fertig, alle Traces-Dateien wurden umbenannt und verschoben.")
 
@@ -116,5 +116,4 @@ def do_all():
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
 
 if __name__ == "__main__":
-    #main()
-    extract()
+    main()

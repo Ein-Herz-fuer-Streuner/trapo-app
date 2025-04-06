@@ -99,18 +99,25 @@ def rename_files(col_old, col_new):
 
 def create_folders(df):
     files_old = df.drop_duplicates(subset="Kennzeichen", keep="first")
-    files_old = files_old["Datei"].values.tolist()
+    files_old = files_old["Kennzeichen"].values.tolist()
     files_old = [x for x in files_old if not x in ["", "?"]]
     for path in files_old:
         path = os.path.join(".", path)
         Path(path).mkdir(parents=True, exist_ok=True)
 
 def move_files(df):
-    for row in df.itertuples():
+    seen = []
+    for index, row in df.iterrows():
         file_ = row["Datei neu"]
-        dir, file = os.path.split(file_)
-        new_path = os.path.join(".", row["Kennzeichen"], file)
-        shutil.move(file_, new_path)
+        if file_ in ["", "?"]:
+            continue
+        file_old = row["Datei"]
+        dir, _ = os.path.split(file_old)
+        file_path = os.path.join(dir, file_)
+        new_path = os.path.join(".", row["Kennzeichen"], file_)
+        if file_ not in seen:
+            shutil.move(file_path, new_path)
+            seen.append(file_)
 
 def filter_stopps(files):
-    return [x for x in files if s in str.lower(x) for s in ["nord", "süd", "sued", "südwest", "suedwest", "mitte"]]
+    return [x for x in files for s in ["nord", "süd", "sued", "südwest", "suedwest", "mitte"] if s in str.lower(x) ]
