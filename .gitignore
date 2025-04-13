@@ -174,3 +174,4 @@ data/
 src/test.py
 *.xlsx
 *.docx
+*.pdf

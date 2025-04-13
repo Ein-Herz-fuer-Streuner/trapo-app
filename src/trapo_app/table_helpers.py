@@ -57,15 +57,21 @@ def clean_name(name):
 
 
 def clean_dob(dob):
-    if dob == "":
+    lower = dob.lower()
+    if dob == "" or dob == " " or lower == "nan":
         return ""
     # try different formats before giving up
-    for fmt in ('%d.%m.%Y', '%d.%m.%y', '%d.%m %Y', '%d.%m %y', '%d %m.%Y', '%d %m %Y', '%d %m.%y', '%d %m %y', '%d/%m/%Y'):
+    for fmt in (
+    '%d.%m.%Y', '%d.%m.%y', '%d.%m %Y', '%d.%m %y', '%d %m.%Y', '%d %m %Y', '%d %m.%y', '%d %m %y', '%d/%m/%Y'):
         try:
             tmp = datetime.strptime(dob, fmt)
             return tmp.strftime('%d.%m.%Y')
         except ValueError:
-           pass
+            pass
+        except TypeError:
+            print("Oh oh, da ist Fehler beim Formatieren eines Geburtsdatums aufgetreten:", dob)
+            print("Bitte korrigieren und diesen Befehl neustarten.")
+            sys.exit(1)
     # none matched
     print("Oh oh, da ist ein Datum nicht richtig formatiert:", dob)
     print("Bitte korrigieren und diesen Befehl neustarten.")
@@ -207,6 +213,7 @@ def compare_contact(cont1, cont2):
                 sys.exit(0)
     return is_same, reasons
 
+
 def match_pet(row, df):
     name = row["Name"]
     count = 0
@@ -217,11 +224,12 @@ def match_pet(row, df):
     if count == 1:
         return df[df["Name"] == name].iloc[0]
     # if more than one or none, check by chip
-    chip  = row["Chip"]
+    chip = row["Chip"]
     for chip_comp in df["Chip"].values:
         if chip == chip_comp:
             return df[df["Chip"] == chip].iloc[0]
     return pd.Series()
+
 
 def compare(df1, df2):
     df1, df2 = prep_work(df1, df2)
@@ -309,7 +317,7 @@ def compare_traces(df1, df2):
                 differences.append({"Name": row["Name"], "Ort": row["Ort"], "Chip": row["Chip"], "DOB": row["DOB"],
                                     "Kontakt": row["Kontakt"], "Intra": matched_row["Intra"],
                                     "Datei": matched_row["Datei"],
-                                    "Kennzeichen":matched_row["Kennzeichen"],
+                                    "Kennzeichen": matched_row["Kennzeichen"],
                                     "Differenz (Chat \u2192 Traces)": difference})
             else:
                 differences.append(
@@ -365,11 +373,13 @@ def build_file_name(df):
     df["Datei neu"] = df["Datei"].apply(match_old_new, args=(files_old, files_new))
     return df, files_old, files_new
 
+
 def match_old_new(cell, old, new):
     for o, n in zip(old, new):
         if cell == o:
             return n
     return ""
+
 
 def write_new_file_names(df):
     df, old, new = build_file_name(df)
@@ -377,3 +387,14 @@ def write_new_file_names(df):
     new = [clean_german(x) for x in new]
     df["Datei neu"] = df["Datei neu"].apply(clean_german)
     return df, old, new
+
+
+def combine_dfs(dfs):
+    dfs = [df.reset_index(drop=True) for df in dfs]
+    df = pd.DataFrame()
+    try:
+        df = pd.concat(dfs, ignore_index=True)
+    except Exception as err:
+        print("Ups, da passt was nicht", err)
+        sys.exit(0)
+    return df

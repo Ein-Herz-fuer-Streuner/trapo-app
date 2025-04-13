@@ -1,9 +1,12 @@
 import os
-from pathlib import Path
 import shutil
+import tkinter as tk
+from pathlib import Path
+from tkinter import filedialog
 
 import pandas as pd
 from docx import Document
+
 
 def get_files(dir_, ending):
     pdfs = []
@@ -15,6 +18,7 @@ def get_files(dir_, ending):
         else:
             continue
     return pdfs
+
 
 def get_file():
     is_valid = False
@@ -28,6 +32,7 @@ def get_file():
     path = os.path.abspath(path)
     return path
 
+
 def get_path():
     is_valid = False
     path = ""
@@ -38,13 +43,14 @@ def get_path():
     path = os.path.abspath(path)
     return path
 
+
 def read_file(path):
-    df = []
+    df = pd.DataFrame()
     try:
         if path.endswith(".xlsx"):
-            df = pd.read_excel(path)
+            df = pd.read_excel(path, dtype=str, keep_default_na=False)
         elif path.endswith(".csv"):
-            df = pd.read_csv(path)
+            df = pd.read_csv(path, dtype=str, keep_default_na=False)
         elif path.endswith(".docx"):
             df = read_docx(path)
     except ValueError:
@@ -53,19 +59,40 @@ def read_file(path):
     except FileNotFoundError:
         print(f"Datei {path} existiert nicht")
         return None
-    except:
-        print("Etwas anderes ist schief gelaufen")
+    except Exception as err:
+        print("Etwas anderes ist schief gelaufen", err)
         return None
     return df
+
+
+def get_several_files_ui():
+    root = tk.Tk()
+    root.withdraw()
+    file_paths = filedialog.askopenfilenames(
+        title="Wähle mehrere Word- oder Exceltabellen aus",
+        filetypes=[("Word- und Excel-Dateien", "*.docx *.xlsx *.xls")]
+    )
+    return list(file_paths)
+
+
+def get_file_ui():
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(
+        title="Wähle eine Datei aus",
+        filetypes=[("Word-,CSV- oder Excel-Datei", "*.docx *.xlsx *.xls *.csv")]
+    )
+    return file_path
 
 
 def read_files(files):
     res = []
     for file in files:
         tmp = read_file(file)
-        if tmp:
+        if not tmp.empty:
             res.append(tmp)
     return res
+
 
 def iter_unique_cells(cells):
     prior_cell = None
@@ -84,18 +111,20 @@ def read_docx(path):
             data.append([cell.text.strip() for cell in list(iter_unique_cells(row.cells))])
 
     # Convert the data to a DataFrame
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(data=data, dtype=str)
 
     # Optional: If the first row is the header
     df.columns = df.iloc[0]
     df = df[1:].reset_index(drop=True)
     return df
 
+
 def rename_files(col_old, col_new):
     for old, new in zip(col_old, col_new):
         dir, file = os.path.split(old)
         new_path = os.path.join(dir, new)
         os.rename(old, new_path)
+
 
 def create_folders(df):
     files_old = df.drop_duplicates(subset="Kennzeichen", keep="first")
@@ -104,6 +133,7 @@ def create_folders(df):
     for path in files_old:
         path = os.path.join(".", path)
         Path(path).mkdir(parents=True, exist_ok=True)
+
 
 def move_files(df):
     seen = []
@@ -119,5 +149,6 @@ def move_files(df):
             shutil.move(file_path, new_path)
             seen.append(file_)
 
+
 def filter_stopps(files):
-    return [x for x in files for s in ["nord", "süd", "sued", "südwest", "suedwest", "mitte"] if s in str.lower(x) ]
+    return [x for x in files for s in ["nord", "süd", "sued", "südwest", "suedwest", "mitte"] if s in str.lower(x)]

@@ -12,6 +12,7 @@ cells_to_keep = [
     "| Rumänien"
 ]
 
+
 def get_table_data(files):
     rows_per_file = []
     for file in files:
@@ -41,7 +42,7 @@ def extract_table_data(files):
     results = []
     raw = get_table_data(files)
 
-    for file, rows in zip(files,raw):
+    for file, rows in zip(files, raw):
         intra = ""
         contact = ""
         chips = []
