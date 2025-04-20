@@ -84,6 +84,7 @@ def compare_with_traces():
 
 
 def rename():
+    '''
     print("Gib nun den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Traces_Vergleich.xlsx'")
     file1 = io_helpers.get_file_ui()
     df1 = io_helpers.read_file(file1)
@@ -92,20 +93,21 @@ def rename():
     print(f"Benenne {len(new)} Dateien um...")
     io_helpers.rename_files(old, new)
     print("Erstelle Kennzeichen-Ordner und ordne Traces zu...")
-    io_helpers.create_folders(df1)
+    folders = io_helpers.create_folders(df1)
     io_helpers.move_files(df1)
-    # print("Gib den Pfad zum Ordner an, in dem die Trapo-Stopp-Dokumente liegen, z.B. './data'")
-    # path = io_helpers.get_path()
-    # files = io_helpers.get_files(path, ".docx")
-    # files = io_helpers.filter_stopps(files)
-    # if len(files) == 0:
-    #    print("Keine .docx-Dateien gefunden")
-    #    sys.exit(1)
-    # all_files = io_helpers.read_files(files)
-    # print("Benenne Ordner um nach Stopp...")
-    # TODO
+    '''
+    folders = ["BN20SFR", "CJ02AFP", "CJ03AFP", "CJ04AFP"]
+    print("Wähle nun alle Word-Dokumente zu den Trapo-Stopps aus, z.B. '04.05.25-NORD-V1-Name.docx'")
+    files = io_helpers.get_several_files_ui()
+    files = io_helpers.filter_stopps(files)
+    if len(files) == 0:
+        print("Keine .docx-Dateien gefunden")
+        sys.exit(1)
+    dfs = io_helpers.read_files(files)
+    print("Benenne Ordner um nach Stopp und verschiebe Word-Datei...")
+    tuples = table_helpers.find_stopp_for_plate(files, dfs, folders)
+    io_helpers.move_and_rename(tuples)
     print("Fertig, alle Traces-Dateien wurden umbenannt und verschoben.")
-
 
 def distance():
     print("Gib als erstes den Pfad zur Kennzeichen-Datei ein, z.B. './data/kennzeichen.xlsx'")
@@ -141,4 +143,4 @@ def do_all():
 
 
 if __name__ == "__main__":
-    main()
+    rename()

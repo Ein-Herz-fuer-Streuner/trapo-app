@@ -1,8 +1,10 @@
 import os
 import shutil
 import tkinter as tk
+import unicodedata
 from pathlib import Path
 from tkinter import filedialog
+import glob
 
 import pandas as pd
 from docx import Document
@@ -133,6 +135,7 @@ def create_folders(df):
     for path in files_old:
         path = os.path.join(".", path)
         Path(path).mkdir(parents=True, exist_ok=True)
+    return files_old
 
 
 def move_files(df):
@@ -149,6 +152,30 @@ def move_files(df):
             shutil.move(file_path, new_path)
             seen.append(file_)
 
+def simple_normalize(s):
+    return (unicodedata.normalize("NFKD", s)
+            .encode("ASCII", "ignore")
+            .decode()
+            .lower())
+
 
 def filter_stopps(files):
-    return [x for x in files for s in ["nord", "süd", "sued", "südwest", "suedwest", "mitte"] if s in str.lower(x)]
+    return [x for x in files for s in ["nord", "süd", "sued", "sud", "südwest", "suedwest", "sudwest", "mitte"] if s in simple_normalize(x)]
+
+def move_and_rename(tuples):
+    for plate, stop, file in tuples:
+        path = os.path.join(".", plate)
+        new_path = os.path.join(".", plate + "_" + stop)
+        # move word doc to new folder
+        shutil.move(file, path)
+        # rename
+        if os.path.exists(path):
+            if not os.path.exists(new_path):
+                os.rename(path, new_path)
+            else:
+                print("Target folder name already exists.")
+        else:
+            print("Original folder does not exist.")
+
+def get_all_files_from_folder(glob_path):
+    return glob.glob(glob_path)

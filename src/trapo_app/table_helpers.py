@@ -1,3 +1,4 @@
+import os.path
 import re
 import string
 import sys
@@ -5,6 +6,8 @@ from datetime import datetime
 
 import pandas as pd
 from thefuzz import fuzz
+
+from trapo_app import io_helpers
 
 phone_regex = r'[\+0-9\/\s-]{8,}'
 email_regex = r'[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -398,3 +401,50 @@ def combine_dfs(dfs):
         print("Ups, da passt was nicht", err)
         sys.exit(0)
     return df
+
+def find_stopp_for_plate(files, dfs, folders):
+    results = []
+    seen = []
+    # go through folders
+    for plate in folders:
+        count = 0
+        found = False
+        # go through zip files, dfs
+        for file, df in zip(files, dfs):
+            if found:
+                break
+            # clean all names in df
+            df['Name'] = df['Name'].apply(clean_name)
+            # extract stop location
+            stop = extract_stop(file)
+            if stop == "":
+                break
+            #get all file names of folder
+            files_ = io_helpers.get_all_files_from_folder(os.path.join(".",plate)+"/*.pdf")
+            # go through all names in the word document
+            for name in df["Name"]:
+                if found:
+                    break
+                for file_ in files_:
+                    if name in file_ and not stop in seen:
+                        # in case of double names, wait for 5 matches
+                        count += 1
+                        if count > 4:
+                            # append tuple (folder, stop, file)
+                            results.append((plate, stop, file))
+                            seen.append(stop)
+                            found = True
+                            break
+    return results
+
+def extract_stop(file):
+    file = io_helpers.simple_normalize(file)
+    if "nord" in file:
+        return "NORD"
+    if "mitte" in file:
+        return "MITTE"
+    if "südwest" in file or "suedwest" in file or "sudwest" in file:
+        return "SÜDWEST"
+    if "süd" in file or "sued" in file or "sud" in file:
+        return "SÜD"
+    return ""
