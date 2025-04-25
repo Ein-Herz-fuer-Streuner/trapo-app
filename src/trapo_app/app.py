@@ -84,7 +84,6 @@ def compare_with_traces():
 
 
 def rename():
-    '''
     print("Gib nun den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Traces_Vergleich.xlsx'")
     file1 = io_helpers.get_file_ui()
     df1 = io_helpers.read_file(file1)
@@ -95,8 +94,6 @@ def rename():
     print("Erstelle Kennzeichen-Ordner und ordne Traces zu...")
     folders = io_helpers.create_folders(df1)
     io_helpers.move_files(df1)
-    '''
-    folders = ["BN20SFR", "CJ02AFP", "CJ03AFP", "CJ04AFP"]
     print("Wähle nun alle Word-Dokumente zu den Trapo-Stopps aus, z.B. '04.05.25-NORD-V1-Name.docx'")
     files = io_helpers.get_several_files_ui()
     files = io_helpers.filter_stopps(files)
