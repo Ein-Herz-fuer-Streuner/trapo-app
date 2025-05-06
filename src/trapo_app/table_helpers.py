@@ -168,8 +168,16 @@ def compare_contact(cont1, cont2):
                         reasons.append("Name")
                         continue
             case 1:
-                ss1 = re.match(r"(\D+)\s*(\d+)?", s1).group(1).strip()
-                ss2 = re.match(r"(\D+)\s*(\d+)?", s2).group(1).strip()
+                ss1 = re.match(r"(\D+)\s*(\d+)?", s1)
+                if not ss1:
+                    print("Chat-Datei: Konnte Straße", s1, "nicht matchen")
+                    return False, ["Regex-Fehler"]
+                ss1 = ss1.group(1).strip()
+                ss2 = re.match(r"(\D+)\s*(\d+)?", s2)
+                if not ss2:
+                    print("PO-Datei: Konnte Straße", s2, "nicht matchen")
+                    return False, ["Regex-Fehler"]
+                ss2 = ss2.group(1).strip()
                 if len(ss1) != len(ss2):
                     is_same = False
                     reasons.append("Straße")
