@@ -26,10 +26,13 @@ replace_dict = {
     ",Österreich": "",
     "(Österreich)": "",
     "( Österreich)": "",
+    "( Schweden)": "",
+    ", Schweden": "",
     "  ": " ",
     "und": "&",
     "Und": "&",
     "u.": "&",
+    ",": "-",
 }
 
 german_char_map = {ord('ä'): 'ae', ord('ü'): 'ue', ord('ö'): 'oe', ord('ß'): 'ss'}
@@ -151,7 +154,7 @@ def compare_contact(cont1, cont2):
     if len(split1) != len(split2):
         # TODO if Tierheim -> make ok
         return False, ["Länge"]
-    if len(split1) > 3:
+    if len(split1) > 3 and "Tierheim" in split1[0]:
         del split1[1]
         del split2[1]
     for i, (s1, s2) in enumerate(zip(split1, split2)):
@@ -170,11 +173,13 @@ def compare_contact(cont1, cont2):
             case 1:
                 ss1 = re.match(r"(\D+)\s*(\d+)?", s1)
                 if not ss1:
+                    print(cont1, cont2)
                     print("Chat-Datei: Konnte Straße", s1, "nicht matchen")
                     return False, ["Regex-Fehler"]
                 ss1 = ss1.group(1).strip()
                 ss2 = re.match(r"(\D+)\s*(\d+)?", s2)
                 if not ss2:
+                    print(cont1, cont2)
                     print("PO-Datei: Konnte Straße", s2, "nicht matchen")
                     return False, ["Regex-Fehler"]
                 ss2 = ss2.group(1).strip()
