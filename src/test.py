@@ -41,8 +41,8 @@ def get_driving_distance(coord1, coord2):
 
 
 # Example: Addresses in Germany
-address1 = "Cranachstraße 53, 99423 Weimar"
-address2 = "Nordhäuser Str. 6, 37412 Herzberg"
+address1 = "Huchenfelder Hauptstrasse 76, 75181 Pforzheim"
+address2 = "Rugenbarg 252, 22549 Hamburg"
 
 coord1 = get_coordinates(address1)
 coord2 = get_coordinates(address2)
