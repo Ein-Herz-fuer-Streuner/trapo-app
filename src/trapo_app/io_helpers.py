@@ -198,7 +198,7 @@ def save_distance_sheets(paths, dfs):
             header_format = workbook.add_format({
                 'bold': True,
                 'font_color': 'white',
-                'bg_color': '#00008B',  # Dark blue
+                'bg_color': '#294879',  # Dark blue
                 'align': 'center'
             })
 

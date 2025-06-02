@@ -538,6 +538,6 @@ def add_distance(dfs, stopps):
         # Compute the new column values using apply
         new_column_values = df.apply(math_helpers.calculate_distance, axis=1, args=(stopps,))
         # Insert the new column at position 2
-        df.insert(loc=2, column='Entfernung', value=new_column_values)
+        df.insert(loc=5, column='Entfernung', value=new_column_values)
         results.append(df)
     return results
