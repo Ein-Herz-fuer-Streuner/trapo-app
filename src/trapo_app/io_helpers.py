@@ -57,13 +57,13 @@ def read_file(path):
             df = read_docx(path)
     except ValueError:
         print("Datei ist ungültig")
-        return None
+        return df
     except FileNotFoundError:
         print(f"Datei {path} existiert nicht")
-        return None
+        return df
     except Exception as err:
         print("Etwas anderes ist schief gelaufen", err)
-        return None
+        return df
     return df
 
 
@@ -93,6 +93,8 @@ def read_files(files):
         tmp = read_file(file)
         if not tmp.empty:
             res.append(tmp)
+        else:
+            print("Konnte Datei ", file, "nicht lesen")
     return res
 
 
@@ -179,3 +181,34 @@ def move_and_rename(tuples):
 
 def get_all_files_from_folder(glob_path):
     return glob.glob(glob_path)
+
+def save_distance_sheets(paths, dfs):
+    for file, df in zip(paths, dfs):
+        path, name = os.path.split(file)
+        name, _ = os.path.splitext(name)
+        # Save to Excel with formatting
+        output_file = name + "_Entfernung.xlsx"
+        with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Entfernung')
+
+            workbook = writer.book
+            worksheet = writer.sheets['Entfernung']
+
+            # Define format: dark blue background, white bold font
+            header_format = workbook.add_format({
+                'bold': True,
+                'font_color': 'white',
+                'bg_color': '#00008B',  # Dark blue
+                'align': 'center'
+            })
+
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+            # Apply formatting to rows where row equals column headers
+            for row_num, row_data in df.iterrows():
+                if all(str(row_data[col]) == col for col in df.columns) and row_data['Row Number'] == 'Row Number':
+                    worksheet.set_row(row_num, None, header_format)
+            for column in df:
+                column_length = max(df[column].astype(str).map(len).max(), len(column))
+                col_idx = df.columns.get_loc(column)
+                writer.sheets['Entfernung'].set_column(col_idx, col_idx, column_length)

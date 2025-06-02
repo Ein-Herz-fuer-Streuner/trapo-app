@@ -7,7 +7,7 @@ from datetime import datetime
 import pandas as pd
 from thefuzz import fuzz
 
-from trapo_app import io_helpers
+from trapo_app import io_helpers, math_helpers
 
 phone_regex = r'[\+0-9\/\s-]{8,}'
 email_regex = r'[a-zA-Z0-9._%+-]+@?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
@@ -68,7 +68,7 @@ def clean_dob(dob):
         return ""
     # try different formats before giving up
     for fmt in (
-    '%d.%m.%Y', '%d.%m.%y', '%d.%m %Y', '%d.%m %y', '%d %m.%Y', '%d %m %Y', '%d %m.%y', '%d %m %y', '%d/%m/%Y'):
+            '%d.%m.%Y', '%d.%m.%y', '%d.%m %Y', '%d.%m %y', '%d %m.%Y', '%d %m %Y', '%d %m.%y', '%d %m %y', '%d/%m/%Y'):
         try:
             tmp = datetime.strptime(dob, fmt)
             return tmp.strftime('%d.%m.%Y')
@@ -413,6 +413,7 @@ def combine_dfs(dfs):
         sys.exit(0)
     return df
 
+
 def find_stopp_for_plate(files, dfs, folders):
     results = []
     seen = []
@@ -430,8 +431,8 @@ def find_stopp_for_plate(files, dfs, folders):
             stop = extract_stop(file)
             if stop == "":
                 break
-            #get all file names of folder
-            files_ = io_helpers.get_all_files_from_folder(os.path.join(".",plate)+"/*.pdf")
+            # get all file names of folder
+            files_ = io_helpers.get_all_files_from_folder(os.path.join(".", plate) + "/*.pdf")
             # go through all names in the word document
             for name in df["Name"]:
                 if found:
@@ -448,6 +449,7 @@ def find_stopp_for_plate(files, dfs, folders):
                             break
     return results
 
+
 def extract_stop(file):
     file = io_helpers.simple_normalize(file)
     if "nord" in file:
@@ -459,3 +461,83 @@ def extract_stop(file):
     if "süd" in file or "sued" in file or "sud" in file:
         return "SÜD"
     return ""
+
+
+def shrink_tables(dfs):
+    results = []
+    for df in dfs:
+        wanted_cols = ['Photo', 'Name', 'Kontakt', 'Treffpunkt']
+        tab_cols = list(df.columns)
+        got_cols = []
+        for col in tab_cols:
+            if col in wanted_cols:
+                got_cols.append(col)
+        new_df = df[got_cols]
+        new_df = new_df.sort_values('Name')
+        results.append(new_df)
+    return results
+
+
+def extract_all_plates(text):
+    text = text.upper()  # Case-insensitive
+
+    plates = []
+
+    # --- German plate pattern with optional 'E'
+    german_pattern = re.compile(r'([A-ZÄÖÜ]{1,3})\s*[- ]?\s*([A-Z]{1,2})\s*[- ]?\s*(\d{1,4})(\s*[EH])?')
+    matches = german_pattern.findall(text)
+    for match in matches:
+        city, letters, numbers, e = match
+        e = ' E' if e else ''
+        plates.append(f"{city}-{letters} {numbers}{e}")
+
+    # --- Austrian pattern (simplified)
+    austrian_pattern = re.compile(r'([A-ZÄÖÜ]{1,3})\s*(\d{1,4})([A-Z]{1,2})')
+    matches = austrian_pattern.findall(text)
+    for match in matches:
+        district, numbers, letters = match
+        plate = f"{district}-{numbers}{letters} (Österreich)"
+        if plate not in plates:  # Avoid duplicates
+            plates.append(plate)
+
+    # --- Swiss pattern
+    swiss_pattern = re.compile(r'([A-Z]{2})\s*(\d{1,6})')
+    matches = swiss_pattern.findall(text)
+    for match in matches:
+        canton, numbers = match
+        plate = f"{canton} {numbers} (Schweiz)"
+        if plate not in plates:
+            plates.append(plate)
+
+    return ", ".join(plates)
+
+
+def find_plate(row, plates_df):
+    for row_num, row_data in plates_df.iterrows():
+        plate = row_data.iloc[1]
+        pet = row_data.iloc[2].lower()
+        pet_row = row["Name"].lower()
+        if pet in pet_row or pet_row in pet:
+            return extract_all_plates(plate)
+    return "nicht gefunden!"
+
+
+def add_plates(dfs, df1):
+    results = []
+    for df in dfs:
+        # Compute the new column values using apply
+        new_column_values = df.apply(find_plate, axis=1, args=(df1,))
+        # Insert the new column at position 2
+        df.insert(loc=2, column='Kennzeichen', value=new_column_values)
+        results.append(df)
+    return results
+
+def add_distance(dfs, stopps):
+    results = []
+    for df in dfs:
+        # Compute the new column values using apply
+        new_column_values = df.apply(math_helpers.calculate_distance, axis=1, args=(stopps,))
+        # Insert the new column at position 2
+        df.insert(loc=2, column='Entfernung', value=new_column_values)
+        results.append(df)
+    return results

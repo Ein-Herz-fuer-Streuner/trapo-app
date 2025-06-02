@@ -17,7 +17,7 @@ def main():
     print("- trapo-extrakt: Extrahiert Daten aus den Traces Dokumenten")
     print("- trapo-traces-vergleich: Vergleicht die extrahierten Traces-Daten sie mit einer Tabelle")
     print("- trapo-traces: Benennt Traces Dokumente um")
-    print("- trapo-kennzeichen: Sortiert eine Tabelle nach Entfernungen der angegeben Adressen")
+    print("- trapo-km: Das Rosi-Spezial :) Sortiert eine Tabelle nach Entfernungen der angegeben Adressen")
     print("- trapo-kombi: Kombiniert mehrere Tabellen zu einer")
     print("- trapo-komplett: Macht alles auf einmal! Ein Start, eine Datei am Ende, alles erledigt!")
 
@@ -107,13 +107,27 @@ def rename():
     print("Fertig, alle Traces-Dateien wurden umbenannt und verschoben.")
 
 def distance():
-    print("Gib als erstes den Pfad zur Kennzeichen-Datei ein, z.B. './data/kennzeichen.xlsx'")
+    print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
+    print(
+        "Wähle im sich gleich öffnenden Fenster alle Dateien aus, für die du die Entfernung berechnen willst. Kehre danach hierhin zurück.")
+    files = io_helpers.get_several_files_ui()
+    dfs = io_helpers.read_files(files)
+    print("Gib als jetzt den Pfad zur Kennzeichen-Datei ein, z.B. './data/kennzeichen.csv'")
     file1 = io_helpers.get_file_ui()
     df1 = io_helpers.read_file(file1)
-    print("Berechne Anfahrten...")
+    print("Gib nun den Pfad zur Trapo-Stopp-Liste ein, z.B. 'Trapo-Adressen.xlsx'")
+    file2 = io_helpers.get_file_ui()
+    df2 = io_helpers.read_file(file2)
+    print("Verkleinere Tabellen...")
+    dfs = table_helpers.shrink_tables(dfs)
+    print("Füge Kennzeichen hinzu...")
+    dfs = table_helpers.add_plates(dfs, df1)
+    print("Berechne Anfahrten & sortiere nach Entfernung...")
+    dfs = table_helpers.add_distance(dfs, df2)
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
-    path = os.path.abspath(os.path.join(".", "Trapo_Kennzeichen.xlsx"))
-    print(f"Fertig! Die Datei liegt unter '{path}'")
+    print("Speichere...")
+    io_helpers.save_distance_sheets(files, dfs)
+    print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
 
 
 def combine():
@@ -140,4 +154,4 @@ def do_all():
 
 
 if __name__ == "__main__":
-    main()
+    distance()
