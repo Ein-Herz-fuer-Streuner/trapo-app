@@ -5,8 +5,8 @@ import sys
 from datetime import datetime
 
 import pandas as pd
-from thefuzz import fuzz
-
+from thefuzz import fuzz as thefuzz
+from rapidfuzz import process, fuzz
 from trapo_app import io_helpers, math_helpers
 
 phone_regex = r'[\+0-9\/\s-]{8,}'
@@ -162,7 +162,7 @@ def compare_contact(cont1, cont2):
         s2 = s2.strip()
         match i:
             case 0:
-                if fuzz.ratio(s1, s2) < 99:
+                if thefuzz.ratio(s1, s2) < 99:
                     # Tom Man and Tina Woman would match
                     # Tom and Martina Man would not
                     # TODO split and check if all in other
@@ -473,60 +473,102 @@ def shrink_tables(dfs):
             if col in wanted_cols:
                 got_cols.append(col)
         new_df = df[got_cols]
-        new_df = new_df.sort_values('Name')
         results.append(new_df)
     return results
 
+def clean_plate_dfs(dfs):
+    results = []
+    for df in dfs:
+        # clean input
+        df['Name'] = df['Name'].apply(clean_name)
+        df['Kontakt'] = df['Kontakt'].apply(clean_contact)
+        if 'Ort' in df.columns:
+            df["Ort"] = df["Ort"].apply(clean_location)
+        df = df.sort_values('Name')
+        df = df.reset_index(drop=True)
+        results.append(df)
+
+    return results
 
 def extract_all_plates(text):
-    text = text.upper()  # Case-insensitive
-
+    text = text.upper()
     plates = []
+    matched_spans = []
+
+    def is_overlapping(span):
+        return any(max(start, span[0]) < min(end, span[1]) for start, end in matched_spans)
 
     # --- German plate pattern with optional 'E'
-    german_pattern = re.compile(r'([A-ZÄÖÜ]{1,3})\s*[- ]?\s*([A-Z]{1,2})\s*[- ]?\s*(\d{1,4})(\s*[EH])?')
-    matches = german_pattern.findall(text)
-    for match in matches:
-        city, letters, numbers, e = match
-        e = ' E' if e else ''
-        plates.append(f"{city}-{letters} {numbers}{e}")
+    german_pattern = re.compile(r'\b([A-ZÄÖÜ]{1,3})\s*[- :]?\s*([A-Z]{1,2})\s*[- ]?\s*(\d{1,4})(\s*E)?\b')
+    for match in german_pattern.finditer(text):
+        if not is_overlapping(match.span()):
+            city, letters, numbers, e = match.groups()
+            e = ' E' if e else ''
+            plates.append(f"{city}-{letters} {numbers}{e}")
+            matched_spans.append(match.span())
 
     # --- Austrian pattern (simplified)
-    austrian_pattern = re.compile(r'([A-ZÄÖÜ]{1,3})\s*(\d{1,4})([A-Z]{1,2})')
-    matches = austrian_pattern.findall(text)
-    for match in matches:
-        district, numbers, letters = match
-        plate = f"{district}-{numbers}{letters} (Österreich)"
-        if plate not in plates:  # Avoid duplicates
+    austrian_pattern = re.compile(r'\b([A-ZÄÖÜ]{1,3})\s*(\d{1,4})([A-Z]{1,2})\b')
+    for match in austrian_pattern.finditer(text):
+        if not is_overlapping(match.span()):
+            district, numbers, letters = match.groups()
+            plate = f"{district}-{numbers}{letters} (AT)"
             plates.append(plate)
+            matched_spans.append(match.span())
 
     # --- Swiss pattern
-    swiss_pattern = re.compile(r'([A-Z]{2})\s*(\d{1,6})')
-    matches = swiss_pattern.findall(text)
-    for match in matches:
-        canton, numbers = match
-        plate = f"{canton} {numbers} (Schweiz)"
-        if plate not in plates:
+    swiss_pattern = re.compile(r'\b([A-Z]{2})\s*(\d{1,6})\b')
+    for match in swiss_pattern.finditer(text):
+        if not is_overlapping(match.span()):
+            canton, numbers = match.groups()
+            plate = f"{canton}-{numbers} (CH)"
             plates.append(plate)
+            matched_spans.append(match.span())
 
+    if len(plates) == 0:
+        return "Nicht gefunden!"
     return ", ".join(plates)
 
 
-def find_plate(row, plates_df):
-    for row_num, row_data in plates_df.iterrows():
-        plate = row_data.iloc[1]
-        pet = row_data.iloc[2].lower()
-        pet_row = row["Name"].lower()
-        if pet in pet_row or pet_row in pet:
-            return extract_all_plates(plate)
-    return "nicht gefunden!"
+def find_plate(name, names_only, row_lookup, df):
+    #print(name)
+    norm = name.lower()
+    match, score, _ = process.extractOne(
+        norm,
+        names_only,
+        scorer=fuzz.ratio,
+        score_cutoff=80
+    ) or (None, None, None)
+
+    if match is None:
+        return "Nicht gefunden!"  # nothing above cutoff
+    row = row_lookup[match]  # map back to df2 row
+    r = df.iloc[row]
+    return extract_all_plates(r["Kennzeichen"])
 
 
 def add_plates(dfs, df1):
     results = []
+    df1.columns = (
+        df1.columns
+        .str.replace(r'^Name.*', 'Name', regex=True)
+        .str.replace(r'^Kennzeichen.*', 'Kennzeichen', regex=True,flags=re.DOTALL)
+    )
+    # Step 1: Extract potential names from df2
+    name_index_pairs = []
+
+    for idx, row in df1.iterrows():
+        text = str(row['Name'])
+        # Find words that look like names (basic regex for words with letters only, min 2 chars)
+        candidates = re.findall(r'\b[A-ZÄÖÜa-zäöüß]{2,}\b', text)
+        for name in candidates:
+            name_index_pairs.append((name.strip().lower(), idx))
+    #print(name_index_pairs)
+    names_only = [n for n, _ in name_index_pairs]  # list[str]
+    row_lookup = {n: row for n, row in name_index_pairs}
     for df in dfs:
         # Compute the new column values using apply
-        new_column_values = df.apply(find_plate, axis=1, args=(df1,))
+        new_column_values = df["Name"].apply(find_plate, args=(names_only, row_lookup ,df1))
         # Insert the new column at position 2
         df.insert(loc=2, column='Kennzeichen', value=new_column_values)
         results.append(df)
@@ -537,7 +579,35 @@ def add_distance(dfs, stopps):
     for df in dfs:
         # Compute the new column values using apply
         new_column_values = df.apply(math_helpers.calculate_distance, axis=1, args=(stopps,))
-        # Insert the new column at position 2
+        # Insert the new column at position 5
         df.insert(loc=5, column='Entfernung', value=new_column_values)
+        # sort by distance PER LOCATION
+        df = df.sort_values(by=['Treffpunkt', 'Entfernung'], ascending=[True,False])
+        df.reset_index(drop=True)
+        # insert extra header
+        df = insert_headers(df)
         results.append(df)
+
     return results
+
+def insert_headers(df):
+    # Prepare new rows with repeated headers and numbering
+    rows = []
+    #columns = ['Nr.'] + df.columns.tolist()  # Add new 'Row Number' column
+    current_meeting = "Treffpunkt"
+    row_counter = 0
+
+    for idx, row in df.iterrows():
+        if row['Treffpunkt'] != current_meeting:
+            current_meeting = row['Treffpunkt']
+            row_counter = 0  # Reset counter for new group
+            # Insert header row (with 'Nr.' as header too)
+            rows.append({'Nr.': 'Nr.', **{col: col for col in df.columns}})
+        row_counter += 1
+        rows.append({'Nr.': row_counter, **row.to_dict()})
+
+    # Convert to new DataFrame
+    new_df = pd.DataFrame(rows)
+    new_df.columns = new_df.iloc[0]
+    new_df = new_df[1:].reset_index(drop=True)
+    return new_df

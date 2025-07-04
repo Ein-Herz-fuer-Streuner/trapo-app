@@ -1,13 +1,17 @@
+import glob
 import os
 import shutil
 import tkinter as tk
 import unicodedata
+from io import BytesIO
 from pathlib import Path
 from tkinter import filedialog
-import glob
 
 import pandas as pd
+from PIL import Image
 from docx import Document
+from openpyxl import load_workbook
+from openpyxl.drawing.image import Image as XLImage
 
 
 def get_files(dir_, ending):
@@ -46,15 +50,19 @@ def get_path():
     return path
 
 
-def read_file(path):
+def read_file(path, images):
     df = pd.DataFrame()
+    imgs = []
     try:
         if path.endswith(".xlsx"):
             df = pd.read_excel(path, dtype=str, keep_default_na=False)
         elif path.endswith(".csv"):
             df = pd.read_csv(path, dtype=str, keep_default_na=False)
         elif path.endswith(".docx"):
-            df = read_docx(path)
+            if images:
+                df, imgs = read_docx_images(path)
+            else:
+                df = read_docx(path)
     except ValueError:
         print("Datei ist ungültig")
         return df
@@ -64,7 +72,7 @@ def read_file(path):
     except Exception as err:
         print("Etwas anderes ist schief gelaufen", err)
         return df
-    return df
+    return df, imgs
 
 
 def get_several_files_ui():
@@ -87,15 +95,16 @@ def get_file_ui():
     return file_path
 
 
-def read_files(files):
+def read_files(files, images):
     res = []
+    imgs = []
     for file in files:
-        tmp = read_file(file)
+        tmp, imgs = read_file(file, images)
         if not tmp.empty:
             res.append(tmp)
         else:
             print("Konnte Datei ", file, "nicht lesen")
-    return res
+    return res, imgs
 
 
 def iter_unique_cells(cells):
@@ -121,6 +130,39 @@ def read_docx(path):
     df.columns = df.iloc[0]
     df = df[1:].reset_index(drop=True)
     return df
+
+
+def read_docx_images(path):
+    document = Document(path)
+    data = []
+    images_map = []
+    for table in document.tables:
+        for row in table.rows:
+            row_data = []
+            row_images = []
+            for cell_idx, cell in enumerate(list(iter_unique_cells(row.cells))):
+                row_data.append(cell.text.strip())
+                cell_images = []
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        for rel in run.part.rels.values():
+                            if "image" in rel.reltype:
+                                img_blob = rel.target_part.blob
+                                img_stream = BytesIO(img_blob)
+                                img_stream.name = f"r{len(data)}_c{cell_idx}.png"
+                                cell_images.append(img_stream)
+                row_images.append(cell_images)
+            data.append(row_data)
+            images_map.append(row_images)
+
+    # Convert the data to a DataFrame
+    df = pd.DataFrame(data=data, dtype=str)
+
+    # Optional: If the first row is the header
+    df.columns = df.iloc[0]
+    df = df[1:].reset_index(drop=True)
+    images_map = images_map[1:]
+    return df, images_map
 
 
 def rename_files(col_old, col_new):
@@ -154,6 +196,7 @@ def move_files(df):
             shutil.move(file_path, new_path)
             seen.append(file_)
 
+
 def simple_normalize(s):
     return (unicodedata.normalize("NFKD", s)
             .encode("ASCII", "ignore")
@@ -162,7 +205,9 @@ def simple_normalize(s):
 
 
 def filter_stopps(files):
-    return [x for x in files for s in ["nord", "süd", "sued", "sud", "südwest", "suedwest", "sudwest", "mitte"] if s in simple_normalize(x)]
+    return [x for x in files for s in ["nord", "süd", "sued", "sud", "südwest", "suedwest", "sudwest", "mitte"] if
+            s in simple_normalize(x)]
+
 
 def move_and_rename(tuples):
     for plate, stop, file in tuples:
@@ -179,11 +224,13 @@ def move_and_rename(tuples):
         else:
             print("Original folder does not exist.")
 
+
 def get_all_files_from_folder(glob_path):
     return glob.glob(glob_path)
 
-def save_distance_sheets(paths, dfs):
-    for file, df in zip(paths, dfs):
+
+def save_distance_sheets(paths, dfs, imgs, image_resize=(80, 80)):
+    for file, df, pics in zip(paths, dfs, imgs):
         path, name = os.path.split(file)
         name, _ = os.path.splitext(name)
         # Save to Excel with formatting
@@ -206,9 +253,42 @@ def save_distance_sheets(paths, dfs):
                 worksheet.write(0, col_num, value, header_format)
             # Apply formatting to rows where row equals column headers
             for row_num, row_data in df.iterrows():
-                if all(str(row_data[col]) == col for col in df.columns) and row_data['Row Number'] == 'Row Number':
-                    worksheet.set_row(row_num, None, header_format)
+                if row_data['Nr.'] == 'Nr.':
+                    for col_num, col in enumerate(df.columns):
+                        if str(row_data[col]) == col:
+                            worksheet.write(row_num + 1, col_num, row_data[col], header_format)
             for column in df:
                 column_length = max(df[column].astype(str).map(len).max(), len(column))
                 col_idx = df.columns.get_loc(column)
                 writer.sheets['Entfernung'].set_column(col_idx, col_idx, column_length)
+
+        # Step 2: Re-open workbook to insert images
+        '''
+        wb = load_workbook(output_file)
+        ws = wb['Entfernung']
+        # Step 3: Add images
+        for r_idx in range(len(pics)):
+            for c_idx in range(len(pics[r_idx])):
+                cell_images = pics[r_idx][c_idx]
+                excel_row = r_idx + 2  # +2 because Excel is 1-indexed and row 1 is the header
+                excel_col = c_idx + 1
+
+                for img_stream in cell_images:
+                    try:
+                        img_stream.seek(0)
+                        pil_img = Image.open(img_stream)
+                        pil_img.thumbnail(image_resize)
+
+                        img_buffer = BytesIO()
+                        pil_img.save(img_buffer, format="PNG")
+                        img_buffer.seek(0)
+                        img_buffer.name = img_stream.name  # optional
+
+                        xl_img = XLImage(img_buffer)
+                        ws.add_image(xl_img, ws.cell(row=excel_row, column=excel_col).coordinate)
+
+                    except Exception as e:
+                        print(f"Failed to embed image: {e}")
+
+        wb.save(output_file)
+        '''

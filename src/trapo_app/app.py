@@ -26,10 +26,10 @@ def compare():
     print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
     print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
     file1 = io_helpers.get_file_ui()
-    df1 = io_helpers.read_file(file1)
+    df1, _ = io_helpers.read_file(file1, False)
     print("Gib nun den Pfad zur Datei aus PetOffice ein, z.B. './data/po.docx'")
     file2 = io_helpers.get_file_ui()
-    df2 = io_helpers.read_file(file2)
+    df2, _ = io_helpers.read_file(file2, False)
     print("Vergleiche...")
     df = table_helpers.compare(df1, df2)
     path = os.path.abspath(os.path.join(".", "Trapo_Vergleich.xlsx"))
@@ -66,10 +66,10 @@ def extract():
 def compare_with_traces():
     print("Gib als erstes den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Vergleich.xlsx'")
     file1 = io_helpers.get_file_ui()
-    df1 = io_helpers.read_file(file1)
+    df1, _ = io_helpers.read_file(file1, False)
     print("Gib nun den Pfad zu Traces_Extrakt-Tabelle ein, z.B. './Traces_Extrakt.xlsx'")
     file2 = io_helpers.get_file_ui()
-    df2 = io_helpers.read_file(file2)
+    df2, _ = io_helpers.read_file(file2, False)
     print("Vergleiche...")
     df = table_helpers.compare_traces(df1, df2)
     path = os.path.abspath(os.path.join(".", "Trapo_Traces_Vergleich.xlsx"))
@@ -86,7 +86,7 @@ def compare_with_traces():
 def rename():
     print("Gib nun den Pfad zur Trapo_Vergleich-Tabelle ein, z.B. './Trapo_Traces_Vergleich.xlsx'")
     file1 = io_helpers.get_file_ui()
-    df1 = io_helpers.read_file(file1)
+    df1, _ = io_helpers.read_file(file1, False)
     print("Baue neuen Dateinamen...")
     df1, old, new = table_helpers.write_new_file_names(df1)
     print(f"Benenne {len(new)} Dateien um...")
@@ -100,7 +100,7 @@ def rename():
     if len(files) == 0:
         print("Keine .docx-Dateien gefunden")
         sys.exit(1)
-    dfs = io_helpers.read_files(files)
+    dfs, _ = io_helpers.read_files(files, False)
     print("Benenne Ordner um nach Stopp und verschiebe Word-Datei...")
     tuples = table_helpers.find_stopp_for_plate(files, dfs, folders)
     io_helpers.move_and_rename(tuples)
@@ -111,22 +111,23 @@ def distance():
     print(
         "Wähle im sich gleich öffnenden Fenster alle Dateien aus, für die du die Entfernung berechnen willst. Kehre danach hierhin zurück.")
     files = io_helpers.get_several_files_ui()
-    dfs = io_helpers.read_files(files)
+    dfs, imgs = io_helpers.read_files(files, True)
     print("Gib als jetzt den Pfad zur Kennzeichen-Datei ein, z.B. './data/kennzeichen.csv'")
     file1 = io_helpers.get_file_ui()
-    df1 = io_helpers.read_file(file1)
+    df1, _ = io_helpers.read_file(file1, False)
     print("Gib nun den Pfad zur Trapo-Stopp-Liste ein, z.B. 'Trapo-Adressen.xlsx'")
     file2 = io_helpers.get_file_ui()
-    df2 = io_helpers.read_file(file2)
+    df2, _ = io_helpers.read_file(file2, False)
     print("Verkleinere Tabellen...")
     dfs = table_helpers.shrink_tables(dfs)
+    dfs = table_helpers.clean_plate_dfs(dfs)
     print("Füge Kennzeichen hinzu...")
     dfs = table_helpers.add_plates(dfs, df1)
     print("Berechne Anfahrten & sortiere nach Entfernung...")
     dfs = table_helpers.add_distance(dfs, df2)
     print("Dies ist nur ein Dummy, hier passiert noch nichts.")
     print("Speichere...")
-    io_helpers.save_distance_sheets(files, dfs)
+    io_helpers.save_distance_sheets(files, dfs, imgs)
     print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
 
 
@@ -134,7 +135,7 @@ def combine():
     print(
         "Wähle im sich gleich öffnenden Fenster alle Dateien aus, die du kombinieren willst. Kehre danach hierhin zurück.")
     files = io_helpers.get_several_files_ui()
-    dfs = io_helpers.read_files(files)
+    dfs, _ = io_helpers.read_files(files, False)
     df = table_helpers.combine_dfs(dfs)
     path = os.path.abspath(os.path.join(".", "Trapo_Kombiniert.xlsx"))
     writer = pd.ExcelWriter(path)
@@ -154,4 +155,4 @@ def do_all():
 
 
 if __name__ == "__main__":
-    distance()
+    main()
