@@ -526,7 +526,7 @@ def extract_all_plates(text):
             matched_spans.append(match.span())
 
     if len(plates) == 0:
-        return "Nicht gefunden!"
+        return ""
     return ", ".join(plates)
 
 
@@ -541,7 +541,7 @@ def find_plate(name, names_only, row_lookup, df):
     ) or (None, None, None)
 
     if match is None:
-        return "Nicht gefunden!"  # nothing above cutoff
+        return ""  # nothing above cutoff
     row = row_lookup[match]  # map back to df2 row
     r = df.iloc[row]
     return extract_all_plates(r["Kennzeichen"])
