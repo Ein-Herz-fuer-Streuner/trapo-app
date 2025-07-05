@@ -55,7 +55,7 @@ def read_file(path, images):
     imgs = []
     try:
         if path.endswith(".xlsx"):
-            df = pd.read_excel(path, dtype=str, keep_default_na=False)
+            df = read_excel(path)
         elif path.endswith(".csv"):
             df = pd.read_csv(path, dtype=str, keep_default_na=False)
         elif path.endswith(".docx"):
@@ -65,13 +65,13 @@ def read_file(path, images):
                 df = read_docx(path)
     except ValueError:
         print("Datei ist ungültig")
-        return df
+        return df, imgs
     except FileNotFoundError:
         print(f"Datei {path} existiert nicht")
-        return df
+        return df, imgs
     except Exception as err:
         print("Etwas anderes ist schief gelaufen", err)
-        return df
+        return df, imgs
     return df, imgs
 
 
@@ -131,6 +131,19 @@ def read_docx(path):
     df = df[1:].reset_index(drop=True)
     return df
 
+def read_excel(file):
+    # Read first 20 rows without headers to detect the header row
+    preview = pd.read_excel(file, header=None, nrows=20)
+
+    # Find first row index where there's at least one non-empty cell (likely header)
+    header_row_idx = preview.apply(lambda row: row.notna().any(), axis=1).idxmax()
+
+    # Read again using that row as header, skip everything before
+    df = pd.read_excel(file, dtype=str, keep_default_na=False, header=header_row_idx)
+
+    # Optional: drop fully empty rows below the table if any
+    df = df.dropna(how='all')
+    return df
 
 def read_docx_images(path):
     document = Document(path)

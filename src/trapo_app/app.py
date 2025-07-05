@@ -125,8 +125,7 @@ def distance():
     dfs = table_helpers.add_plates(dfs, df1)
     print("Berechne Anfahrten & sortiere nach Entfernung...")
     dfs = table_helpers.add_distance(dfs, df2)
-    print("Dies ist nur ein Dummy, hier passiert noch nichts.")
-    print("Speichere...")
+    print("Fertig!\nSpeichere...")
     io_helpers.save_distance_sheets(files, dfs, imgs)
     print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
 
@@ -155,4 +154,4 @@ def do_all():
 
 
 if __name__ == "__main__":
-    main()
+    distance()

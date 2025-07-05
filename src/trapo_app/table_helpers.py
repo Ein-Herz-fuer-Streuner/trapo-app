@@ -2,6 +2,7 @@ import os.path
 import re
 import string
 import sys
+import time
 from datetime import datetime
 
 import pandas as pd
@@ -576,11 +577,16 @@ def add_plates(dfs, df1):
 
 def add_distance(dfs, stopps):
     results = []
-    for df in dfs:
+    print("Anfragen an OpenStreemMap sind begrenzt auf einen pro Sekunde, dieser Schritt kann dauern...")
+    for i, df in enumerate(dfs):
+        print(f"Berechne Entfernungen für Dokument {i+1} von {len(dfs)}...")
         # Compute the new column values using apply
-        new_column_values = df.apply(math_helpers.calculate_distance, axis=1, args=(stopps,))
+        distances = []
+        for i, row in df.iterrows():
+            distances.append(math_helpers.calculate_distance(row, stopps))
+            time.sleep(1)
         # Insert the new column at position 5
-        df.insert(loc=5, column='Entfernung', value=new_column_values)
+        df.insert(loc=5, column='Entfernung', value=distances)
         # sort by distance PER LOCATION
         df = df.sort_values(by=['Treffpunkt', 'Entfernung'], ascending=[True,False])
         df.reset_index(drop=True)
@@ -598,7 +604,7 @@ def insert_headers(df):
     row_counter = 0
 
     for idx, row in df.iterrows():
-        if row['Treffpunkt'] != current_meeting:
+        if not row['Treffpunkt'] in current_meeting and not current_meeting in row['Treffpunkt']:
             current_meeting = row['Treffpunkt']
             row_counter = 0  # Reset counter for new group
             # Insert header row (with 'Nr.' as header too)
