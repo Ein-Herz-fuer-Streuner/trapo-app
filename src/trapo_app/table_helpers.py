@@ -577,7 +577,7 @@ def add_plates(dfs, df1):
 
 def add_distance(dfs, stopps):
     results = []
-    print("Anfragen an OpenStreemMap sind begrenzt auf einen pro Sekunde, dieser Schritt kann dauern...")
+    print("Anfragen an OpenStreemMap sind begrenzt auf eine pro Sekunde, dieser Schritt kann dauern...")
     for i, df in enumerate(dfs):
         print(f"Berechne Entfernungen für Dokument {i+1} von {len(dfs)}...")
         # Compute the new column values using apply

@@ -129,7 +129,6 @@ def distance():
     io_helpers.save_distance_sheets(files, dfs, imgs)
     print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
 
-
 def combine():
     print(
         "Wähle im sich gleich öffnenden Fenster alle Dateien aus, die du kombinieren willst. Kehre danach hierhin zurück.")
@@ -154,4 +153,4 @@ def do_all():
 
 
 if __name__ == "__main__":
-    distance()
+    main()

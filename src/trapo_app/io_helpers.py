@@ -6,12 +6,14 @@ import unicodedata
 from io import BytesIO
 from pathlib import Path
 from tkinter import filedialog
+from docx.oxml.ns import qn
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from lxml import etree
 
 import pandas as pd
 from PIL import Image
 from docx import Document
-from openpyxl import load_workbook
-from openpyxl.drawing.image import Image as XLImage
+from docx.oxml.ns import qn
 
 
 def get_files(dir_, ending):
@@ -52,7 +54,7 @@ def get_path():
 
 def read_file(path, images):
     df = pd.DataFrame()
-    imgs = []
+    imgs = {}
     try:
         if path.endswith(".xlsx"):
             df = read_excel(path)
@@ -60,7 +62,7 @@ def read_file(path, images):
             df = pd.read_csv(path, dtype=str, keep_default_na=False)
         elif path.endswith(".docx"):
             if images:
-                df, imgs = read_docx_images(path)
+                df, imgs = read_docx_with_images(path)
             else:
                 df = read_docx(path)
     except ValueError:
@@ -99,9 +101,10 @@ def read_files(files, images):
     res = []
     imgs = []
     for file in files:
-        tmp, imgs = read_file(file, images)
+        tmp, img_dict = read_file(file, images)
         if not tmp.empty:
             res.append(tmp)
+            imgs.append(img_dict)
         else:
             print("Konnte Datei ", file, "nicht lesen")
     return res, imgs
@@ -131,6 +134,7 @@ def read_docx(path):
     df = df[1:].reset_index(drop=True)
     return df
 
+
 def read_excel(file):
     # Read first 20 rows without headers to detect the header row
     preview = pd.read_excel(file, header=None, nrows=20)
@@ -145,37 +149,71 @@ def read_excel(file):
     df = df.dropna(how='all')
     return df
 
-def read_docx_images(path):
-    document = Document(path)
-    data = []
-    images_map = []
-    for table in document.tables:
-        for row in table.rows:
-            row_data = []
-            row_images = []
-            for cell_idx, cell in enumerate(list(iter_unique_cells(row.cells))):
-                row_data.append(cell.text.strip())
-                cell_images = []
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        for rel in run.part.rels.values():
-                            if "image" in rel.reltype:
-                                img_blob = rel.target_part.blob
-                                img_stream = BytesIO(img_blob)
-                                img_stream.name = f"r{len(data)}_c{cell_idx}.png"
-                                cell_images.append(img_stream)
-                row_images.append(cell_images)
-            data.append(row_data)
-            images_map.append(row_images)
 
-    # Convert the data to a DataFrame
-    df = pd.DataFrame(data=data, dtype=str)
+def _extract_cell(cell):
+    pictures = []
+    paragraph_texts = []
 
-    # Optional: If the first row is the header
+    for para in cell.paragraphs:
+        fragments = []
+        for run in para.runs:
+            run_elem = run._element
+            for node in run_elem.iter():
+                if node.tag.endswith('}t') and node.text:
+                    fragments.append(node.text)
+                elif node.tag.endswith('}br'):
+                    fragments.append('\n')  # soft line break
+
+        paragraph_text = ''.join(fragments)
+        paragraph_texts.append(paragraph_text)
+
+    clean_text = '\n'.join(paragraph_texts).strip()
+
+    # Extract images
+    for node in cell._element.iter():
+        if node.tag.endswith('}blip'):
+            rId = node.get(qn('r:embed'))
+            if rId:
+                img_part = cell.part.related_parts[rId]
+                pictures.append(img_part.blob)
+
+    return clean_text, pictures
+
+
+def read_docx_with_images(path, img_column='Photo'):
+    doc = Document(path)
+    rows, img_registry = [], {}
+    img_col_index = None  # first column that actually contains a picture
+
+    for t in doc.tables:
+        for r_idx, row in enumerate(t.rows):
+            current = []
+            for c_idx, cell in enumerate(row.cells):
+                txt, pics = _extract_cell(cell)
+
+                if pics:  # keep only the *first* image per cell
+                    # give every image a unique key we can round‑trip later
+                    key = f"img_{len(img_registry)}"
+                    img_registry[key] = pics[0]
+
+                    # remember which column holds pictures so we can rename it
+                    img_col_index = c_idx if img_col_index is None else img_col_index
+                    current.append(key)
+                else:
+                    current.append(txt)
+            rows.append(current)
+
+    df = pd.DataFrame(rows, dtype=str)
+
+    # treat first row as header
     df.columns = df.iloc[0]
-    df = df[1:].reset_index(drop=True)
-    images_map = images_map[1:]
-    return df, images_map
+    df = df.iloc[1:].reset_index(drop=True)
+
+    # make sure the picture column has a nice, stable name
+    if img_col_index is not None:
+        df.rename(columns={df.columns[img_col_index]: img_column}, inplace=True)
+
+    return df, img_registry
 
 
 def rename_files(col_old, col_new):
@@ -242,15 +280,18 @@ def get_all_files_from_folder(glob_path):
     return glob.glob(glob_path)
 
 
-def save_distance_sheets(paths, dfs, imgs, image_resize=(80, 80)):
-    for file, df, pics in zip(paths, dfs, imgs):
-        path, name = os.path.split(file)
-        name, _ = os.path.splitext(name)
-        # Save to Excel with formatting
-        output_file = name + "_Entfernung.xlsx"
-        with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False, sheet_name='Entfernung')
+def save_distance_sheets(paths, dfs, img_banks, img_column="Photo", max_img_size=(100, 100)):
+    for file_path, df, img_registry in zip(paths, dfs, img_banks):
+        _, fname = os.path.split(file_path)
+        base, _ = os.path.splitext(fname)
+        out_xlsx = f"{base}_Entfernung.xlsx"
+        # ── make a copy so we don't mutate caller's df ───────────────────────
+        df_xls = df.copy()
+        if img_column in df_xls.columns:
+            df_xls[img_column] = ""  # blank the placeholders
 
+        with pd.ExcelWriter(out_xlsx, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Entfernung')
             workbook = writer.book
             worksheet = writer.sheets['Entfernung']
 
@@ -261,47 +302,61 @@ def save_distance_sheets(paths, dfs, imgs, image_resize=(80, 80)):
                 'bg_color': '#294879',  # Dark blue
                 'align': 'center'
             })
-
             for col_num, value in enumerate(df.columns.values):
                 worksheet.write(0, col_num, value, header_format)
+
+                # Auto‑size every non‑image column
+                for col in df_xls.columns:
+                    if col == img_column:
+                        continue
+                    width = max(df[col].astype(str).map(len).max(), len(col))
+                    idx = df_xls.columns.get_loc(col)
+                    worksheet.set_column(idx, idx, width)
+
             # Apply formatting to rows where row equals column headers
             for row_num, row_data in df.iterrows():
                 if row_data['Nr.'] == 'Nr.':
                     for col_num, col in enumerate(df.columns):
                         if str(row_data[col]) == col:
                             worksheet.write(row_num + 1, col_num, row_data[col], header_format)
-            for column in df:
-                column_length = max(df[column].astype(str).map(len).max(), len(column))
-                col_idx = df.columns.get_loc(column)
-                writer.sheets['Entfernung'].set_column(col_idx, col_idx, column_length)
+                        # ── Insert pictures ──────────────────────────────────────────────
+                        if img_column in df_xls.columns:
+                            img_col_idx = df_xls.columns.get_loc(img_column)
+                            max_col_char = 0  # final column width
 
-        # Step 2: Re-open workbook to insert images
-        '''
-        wb = load_workbook(output_file)
-        ws = wb['Entfernung']
-        # Step 3: Add images
-        for r_idx in range(len(pics)):
-            for c_idx in range(len(pics[r_idx])):
-                cell_images = pics[r_idx][c_idx]
-                excel_row = r_idx + 2  # +2 because Excel is 1-indexed and row 1 is the header
-                excel_col = c_idx + 1
+                            for excel_row, key in enumerate(df[img_column], start=1):  # +1 header
+                                if key not in img_registry:
+                                    continue
 
-                for img_stream in cell_images:
-                    try:
-                        img_stream.seek(0)
-                        pil_img = Image.open(img_stream)
-                        pil_img.thumbnail(image_resize)
+                                raw = img_registry[key]
+                                buf = BytesIO(raw)
+                                w_px, h_px = Image.open(buf).size
 
-                        img_buffer = BytesIO()
-                        pil_img.save(img_buffer, format="PNG")
-                        img_buffer.seek(0)
-                        img_buffer.name = img_stream.name  # optional
+                                # scale down if needed
+                                max_w, max_h = max_img_size
+                                scale = min(1, max_w / w_px, max_h / h_px)
 
-                        xl_img = XLImage(img_buffer)
-                        ws.add_image(xl_img, ws.cell(row=excel_row, column=excel_col).coordinate)
+                                w_px_scaled, h_px_scaled = int(w_px * scale), int(h_px * scale)
+                                row_height_pts = h_px_scaled * 0.75  # px → points
+                                col_width_char = w_px_scaled / 7  # px → Excel chars
+                                max_col_char = max(max_col_char, col_width_char)
 
-                    except Exception as e:
-                        print(f"Failed to embed image: {e}")
+                                # set row height
+                                worksheet.set_row(excel_row, row_height_pts)
 
-        wb.save(output_file)
-        '''
+                                # insert the picture
+                                buf.seek(0)
+                                worksheet.insert_image(
+                                    excel_row, img_col_idx, "",
+                                    {
+                                        "image_data": buf,
+                                        "x_scale": scale,
+                                        "y_scale": scale,
+                                        "x_offset": 0,
+                                        "y_offset": 0,
+                                        "positioning": 1,  # moves/sizes with cells
+                                    },
+                                )
+
+                            # final width for the picture column
+                            worksheet.set_column(img_col_idx, img_col_idx, max_col_char)
