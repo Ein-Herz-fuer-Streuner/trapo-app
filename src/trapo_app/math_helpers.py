@@ -72,19 +72,19 @@ def get_driving_distance(coord1, coord2):
 
 def calculate_distance(row, stopps_df):
     address_from = clean_address(row['Kontakt'])
-    if address_from is None:
+    if address_from is None or address_from == "":
         print("Adresse ist nicht formatierbar", row['Kontakt'])
         return 500
     stopp = row['Treffpunkt']
     address_to = clean_address(get_stopp_address(stopp, stopps_df))
-    if address_to is None:
+    if address_to is None or address_to == "":
         print("Adresse ist nicht formatierbar", stopp)
         return 500
     if address_to == "":
         return 500
     coord_from = get_coordinates(address_from)
     if coord_from is None:
-        print("Konnte keine Koordinaten für den Adopter finden: ", address_from )
+        print("Konnte keine Koordinaten für den Adoptanten finden: ", address_from )
         return 500
     coord_to = get_coordinates(address_to)
     if coord_to is None:

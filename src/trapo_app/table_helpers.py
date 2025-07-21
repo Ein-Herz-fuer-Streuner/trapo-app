@@ -463,6 +463,8 @@ def extract_stop(file):
         return "SÜD"
     return ""
 
+def replace_empty(cell):
+    return '?' if pd.isna(cell) or str(cell).strip() == '' else cell
 
 def shrink_tables(dfs):
     results = []
@@ -473,7 +475,8 @@ def shrink_tables(dfs):
         for col in tab_cols:
             if col in wanted_cols:
                 got_cols.append(col)
-        new_df = df[got_cols]
+        new_df = df[got_cols].copy()
+        new_df["Treffpunkt"] = new_df["Treffpunkt"].apply(replace_empty)
         results.append(new_df)
     return results
 
@@ -582,14 +585,14 @@ def add_distance(dfs, stopps):
         print(f"Berechne Entfernungen für Dokument {i+1} von {len(dfs)}...")
         # Compute the new column values using apply
         distances = []
-        for i, row in df.iterrows():
+        for _, row in df.iterrows():
             distances.append(math_helpers.calculate_distance(row, stopps))
             time.sleep(1)
         # Insert the new column at position 5
         df.insert(loc=5, column='Entfernung', value=distances)
         # sort by distance PER LOCATION
         df = df.sort_values(by=['Treffpunkt', 'Entfernung'], ascending=[True,False])
-        df.reset_index(drop=True)
+        df = df.reset_index(drop=True)
         # insert extra header
         df = insert_headers(df)
         results.append(df)
@@ -604,7 +607,7 @@ def insert_headers(df):
     row_counter = 0
 
     for idx, row in df.iterrows():
-        if not row['Treffpunkt'] in current_meeting and not current_meeting in row['Treffpunkt']:
+        if (idx == 0 and row['Treffpunkt'] != "Treffpunkt") or (not row['Treffpunkt'] in current_meeting and not current_meeting in row['Treffpunkt']):
             current_meeting = row['Treffpunkt']
             row_counter = 0  # Reset counter for new group
             # Insert header row (with 'Nr.' as header too)
