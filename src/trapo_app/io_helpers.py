@@ -285,78 +285,171 @@ def save_distance_sheets(paths, dfs, img_banks, img_column="Photo", max_img_size
         _, fname = os.path.split(file_path)
         base, _ = os.path.splitext(fname)
         out_xlsx = f"{base}_Entfernung.xlsx"
+
         # ── make a copy so we don't mutate caller's df ───────────────────────
         df_xls = df.copy()
+
+        # If you blank image placeholders for export, keep original keys for image insertion:
+        img_keys = None
         if img_column in df_xls.columns:
-            df_xls[img_column] = ""  # blank the placeholders
+            # keep the original column for mapping, but blank cells for export-data-writing if desired
+            img_keys = df_xls[img_column].astype(object).where(df_xls[img_column].notna(), None).tolist()
+            # Optionally blank for the exported table (so cells are empty except images)
+            df_xls[img_column] = ""
+
+        # Build list of header marker indices in the original df (rows with repeated headers)
+        header_marker_idxs = df.index[df['Nr.'] == 'Nr.'].tolist()
 
         with pd.ExcelWriter(out_xlsx, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False, sheet_name='Entfernung')
+            # Write dataframe to sheet without pandas header (we will draw custom headers)
+            df_xls.to_excel(writer, index=False, sheet_name='Entfernung', header=False)
             workbook = writer.book
             worksheet = writer.sheets['Entfernung']
 
-            # Define format: dark blue background, white bold font
+            # Define formats
             header_format = workbook.add_format({
                 'bold': True,
                 'font_color': 'white',
                 'bg_color': '#294879',  # Dark blue
-                'align': 'center'
+                'align': 'center',
+                'valign': 'vcenter'
             })
-            for col_num, value in enumerate(df.columns.values):
-                worksheet.write(0, col_num, value, header_format)
+            cell_format = workbook.add_format({
+                'bold': True,
+                'align': 'center',
+                'valign': 'vcenter'
+            })
+            treffpunkt_format = workbook.add_format({
+                'bold': True,
+                'font_color': 'white',
+                'align': 'center',
+                'valign': 'vcenter',
+                'bg_color': '#294879',   # light blue background
+                'font_size': 12
+            })
 
-                # Auto‑size every non‑image column
-                for col in df_xls.columns:
-                    if col == img_column:
+            # ---------- Place the top header row in the correct position ----------
+            # If the very first original row is a header marker (index 0), the first excel row
+            # currently contains that marker; the column names should be written one row below.
+            # Otherwise write header at excel row 0.
+            # We'll compute an offset: how many header markers are at or before index 0? normally 0 or 1.
+            # Simpler: if the first original row is header marker => header at excel row 1, else header at 0.
+            first_header_row = 0 if (len(header_marker_idxs) == 0 or header_marker_idxs[0] != 0) else 1
+            # write column names at the calculated position
+            for col_num, value in enumerate(df_xls.columns.values):
+                worksheet.write(first_header_row, col_num, value, header_format)
+
+            # ---------- Write all data cells with the cell_format ----------
+            # We must write cell values to the correct excel rows: each original row i
+            # is written at excel_row = i + shift + 0, where shift = number of header markers < = i?
+            # Because we used header=False, pandas wrote raw rows starting at Excel row 0, so the
+            # original row i was written at excel_row = i + number_of_header_markers_before_row_i
+            # (the header marker rows themselves are present in the sheet as "data rows" from df_xls).
+            # We'll re-write each visible cell using cell_format to apply bold/center.
+            # Note: df_xls has the same number of rows as df (we didn't insert Treffpunkt rows into df_xls here).
+            # But the sheet will later receive the merged Treffpunkt rows via your existing logic;
+            # to keep behavior identical, we still write all data cells here where pandas wrote them.
+
+            # Compute a helper function to count header markers before index i
+            def header_shift_for_index(i):
+                # count how many header_marker_idxs are strictly less than i
+                return sum(1 for h in header_marker_idxs if h < i)
+
+            # Re-write every cell using the cell_format at the row pandas used when exporting df_xls (accounting for shift)
+            for orig_idx in df_xls.index:
+                shift = header_shift_for_index(orig_idx)
+                excel_row = orig_idx + shift  # 0-based excel row since header=False
+                for col_num, col in enumerate(df_xls.columns):
+                    val = df_xls.iloc[orig_idx, col_num]
+                    # don't overwrite Treffpunkt merged cell writing later; safe to rewrite data cells
+                    worksheet.write(excel_row, col_num, val, cell_format)
+
+            # ---------- Insert Treffpunkt merged header for repeating header rows ----------
+            # For each header marker row in the original df, find the excel row where that marker was written,
+            # then insert the merged Treffpunkt row above the actual header row (i.e. at that excel row).
+            for row_num in header_marker_idxs:
+                # excel row where the header marker sits (pandas exported it at row = row_num + shift)
+                shift = header_shift_for_index(row_num)
+                marker_excel_row = row_num + shift
+
+                # Treffpunkt value should be taken from the row below the marker in the original df:
+                next_row = row_num + 1 if (row_num + 1) in df.index else None
+                treffpunkt_value = ""
+                if next_row is not None and 'Treffpunkt' in df.columns:
+                    treffpunkt_value = str(df.loc[next_row, 'Treffpunkt']).strip()
+
+                if treffpunkt_value:
+                    # Merge at the marker_excel_row (which is where the marker row is in sheet)
+                    worksheet.merge_range(
+                        marker_excel_row,
+                        0,
+                        marker_excel_row,
+                        len(df.columns) - 1,
+                        treffpunkt_value,
+                        treffpunkt_format
+                    )
+
+                    # After merging and writing Treffpunkt, write the column headers on the row below merged Treffpunkt.
+                    # Column header row (should align with where the marker row used to contain header names)
+                    header_row_excel = marker_excel_row + 1
+                    for col_num, value in enumerate(df.columns.values):
+                        worksheet.write(header_row_excel, col_num, value, header_format)
+
+            # ---------- Auto-size every non-image column ----------
+            for col in df_xls.columns:
+                if col == img_column:
+                    continue
+                width = max(df_xls[col].astype(str).map(len).max(), len(col))
+                idx = df_xls.columns.get_loc(col)
+                worksheet.set_column(idx, idx, width)
+
+            # ---------- Insert pictures (correct Excel row calculation) ----------
+            if img_column in df_xls.columns and img_keys is not None:
+                img_col_idx = df_xls.columns.get_loc(img_column)
+                max_col_char = 0  # final column width
+
+                for orig_idx, key in enumerate(img_keys):
+                    if key is None:
                         continue
-                    width = max(df[col].astype(str).map(len).max(), len(col))
-                    idx = df_xls.columns.get_loc(col)
-                    worksheet.set_column(idx, idx, width)
 
-            # Apply formatting to rows where row equals column headers
-            for row_num, row_data in df.iterrows():
-                if row_data['Nr.'] == 'Nr.':
-                    for col_num, col in enumerate(df.columns):
-                        if str(row_data[col]) == col:
-                            worksheet.write(row_num + 1, col_num, row_data[col], header_format)
-                        # ── Insert pictures ──────────────────────────────────────────────
-                        if img_column in df_xls.columns:
-                            img_col_idx = df_xls.columns.get_loc(img_column)
-                            max_col_char = 0  # final column width
+                    # compute excel row where this original row was written
+                    shift = header_shift_for_index(orig_idx)
+                    excel_row = orig_idx + shift
 
-                            for excel_row, key in enumerate(df[img_column], start=1):  # +1 header
-                                if key not in img_registry:
-                                    continue
+                    if key not in img_registry:
+                        continue
 
-                                raw = img_registry[key]
-                                buf = BytesIO(raw)
-                                w_px, h_px = Image.open(buf).size
+                    raw = img_registry[key]
+                    buf = BytesIO(raw)
+                    w_px, h_px = Image.open(buf).size
 
-                                # scale down if needed
-                                max_w, max_h = max_img_size
-                                scale = min(1, max_w / w_px, max_h / h_px)
+                    # scale down if needed
+                    max_w, max_h = max_img_size
+                    scale = min(1, max_w / w_px, max_h / h_px)
 
-                                w_px_scaled, h_px_scaled = int(w_px * scale), int(h_px * scale)
-                                row_height_pts = h_px_scaled * 0.75  # px → points
-                                col_width_char = w_px_scaled / 7  # px → Excel chars
-                                max_col_char = max(max_col_char, col_width_char)
+                    w_px_scaled, h_px_scaled = int(w_px * scale), int(h_px * scale)
+                    row_height_pts = h_px_scaled * 0.75  # px → points
+                    col_width_char = w_px_scaled / 7  # px → Excel chars
+                    max_col_char = max(max_col_char, col_width_char)
 
-                                # set row height
-                                worksheet.set_row(excel_row, row_height_pts)
+                    # set row height for the sheet row where the image belongs
+                    worksheet.set_row(excel_row, row_height_pts)
 
-                                # insert the picture
-                                buf.seek(0)
-                                worksheet.insert_image(
-                                    excel_row, img_col_idx, "",
-                                    {
-                                        "image_data": buf,
-                                        "x_scale": scale,
-                                        "y_scale": scale,
-                                        "x_offset": 0,
-                                        "y_offset": 0,
-                                        "positioning": 1,  # moves/sizes with cells
-                                    },
-                                )
+                    # insert the picture at the computed excel_row
+                    buf.seek(0)
+                    worksheet.insert_image(
+                        excel_row, img_col_idx, "",
+                        {
+                            "image_data": buf,
+                            "x_scale": scale,
+                            "y_scale": scale,
+                            "x_offset": 0,
+                            "y_offset": 0,
+                            "positioning": 1,  # moves/sizes with cells
+                        },
+                    )
 
-                            # final width for the picture column
-                            worksheet.set_column(img_col_idx, img_col_idx, max_col_char)
+                # final width for the picture column
+                worksheet.set_column(img_col_idx, img_col_idx, max_col_char)
+
+    # function end

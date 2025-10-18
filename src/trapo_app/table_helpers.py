@@ -59,9 +59,17 @@ def clean_german(cell):
 
 def clean_name(name):
     name = name.lower()
-    name = re.sub(r"box\s?(change)?!?", "", name).strip()
+    name = re.sub(r"box\s?(change)?!?", "", name, flags=re.I).strip()
     return string.capwords(name)
 
+def clean_name_with_box_change(name):
+    name = name.lower()
+    if re.match(r"box\s?(change)?!?", name, flags=re.I):
+        name = re.sub(r"box\s?(change)?!?", "", name, flags=re.I).strip()
+        name = name + " (Box Change)"
+    else:
+        name = name.strip()
+    return string.capwords(name)
 
 def clean_dob(dob):
     lower = dob.lower()
@@ -484,7 +492,7 @@ def clean_plate_dfs(dfs):
     results = []
     for df in dfs:
         # clean input
-        df['Name'] = df['Name'].apply(clean_name)
+        df['Name'] = df['Name'].apply(clean_name_with_box_change)
         df['Kontakt'] = df['Kontakt'].apply(clean_contact)
         if 'Ort' in df.columns:
             df["Ort"] = df["Ort"].apply(clean_location)
@@ -498,6 +506,9 @@ def extract_all_plates(text):
     text = text.upper()
     plates = []
     matched_spans = []
+    is_rental = False
+    if re.match(r"Miet[\s?-](wagen|auto)", text, flags=re.I):
+        is_rental = True
 
     def is_overlapping(span):
         return any(max(start, span[0]) < min(end, span[1]) for start, end in matched_spans)
@@ -529,9 +540,14 @@ def extract_all_plates(text):
             plates.append(plate)
             matched_spans.append(match.span())
 
+    tmp = ""
     if len(plates) == 0:
-        return ""
-    return ", ".join(plates)
+        tmp = "----"
+    else:
+        tmp = ", ".join(plates)
+    if is_rental:
+        tmp += " (Mietwagen)"
+    return tmp
 
 
 def find_plate(name, names_only, row_lookup, df):
@@ -590,8 +606,22 @@ def add_distance(dfs, stopps):
             time.sleep(1)
         # Insert the new column at position 5
         df.insert(loc=5, column='Entfernung', value=distances)
-        # sort by distance PER LOCATION
-        df = df.sort_values(by=['Treffpunkt', 'Entfernung'], ascending=[True,False])
+
+        # Add a Treffpunkt order ID to preserve appearance order
+        df['_TreffOrder'] = df['Treffpunkt'].astype('category')
+        df['_TreffOrder'].cat.set_categories(df['Treffpunkt'].unique())
+        # Add temporary sort key for "(Box Change)" rows
+        df['_BoxChange'] = df['Name'].astype(str).str.contains(r'\(Box Change\)', case=False, na=False)
+
+        # Sort:
+        #  1. By Treffpunkt order (as they appeared originally)
+        #  2. BoxChange (False first)
+        #  3. Entfernung (descending)
+        df = df.sort_values(by=['_TreffOrder', '_BoxChange', 'Entfernung'],
+                            ascending=[True, True, False])
+        # Drop temp columns
+        df = df.drop(columns=['_TreffOrder', '_BoxChange'])
+
         df = df.reset_index(drop=True)
         # insert extra header
         df = insert_headers(df)
@@ -617,6 +647,6 @@ def insert_headers(df):
 
     # Convert to new DataFrame
     new_df = pd.DataFrame(rows)
-    new_df.columns = new_df.iloc[0]
-    new_df = new_df[1:].reset_index(drop=True)
+    # new_df.columns = new_df.iloc[0]
+    # new_df = new_df[1:].reset_index(drop=True)
     return new_df
