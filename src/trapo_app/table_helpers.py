@@ -38,6 +38,30 @@ replace_dict = {
 
 german_char_map = {ord('ä'): 'ae', ord('ü'): 'ue', ord('ö'): 'oe', ord('ß'): 'ss'}
 
+translate_map = {
+    "No": "Nr Crt",
+    "Specie": "Specie",
+    "Microchip": "Microcip",
+    "Pass A": "Pasaport",
+    "Health Book": "Nr carnet\nsanatate",
+    "Age": "Varsta\n(in luni)",
+    "Name": "Nume",
+    "kg": "Kg",
+    "Sex/\ncastr": "Sex\n(Femela/Mascul/Castrat)",
+    "TRACES": "Importator\nNume, Adresa\ntrace nr.",
+    "Kontakt": "Adoptator\nNume, Adresa\nTelefon",
+    "Data\nchip": "Data microcip",
+    "Data\nrabic": "Data rabic",
+
+}
+
+ro_headers = [
+"Nr Crt", "Specie", "Microcip", "Pasaport",	"Nr carnet\nsanatate", "Varsta\n(in luni)", "Nume", "Kg",
+"Sex\n(Femela/Mascul/Castrat)",	"Importator\nNume, Adresa\ntrace nr.", "Adoptator\nNume, Adresa\nTelefon",
+"Nr auto iesire", "Data microcip", "Data rabic",
+"Locul de origine Nr de Inregistrare\nsau de autorizare unic al unitatii\nde origine a animalelor",
+"Nr inmatriculare\nAuto Sosire", "Nr proces verbal\ndezinfectie"
+]
 
 def clean_compare_table(df):
     df = df.rename(columns={"Daten ES/PS/PSO": "Kontakt", "Microchip": "Chip"}, errors="ignore")
@@ -650,3 +674,25 @@ def insert_headers(df):
     # new_df.columns = new_df.iloc[0]
     # new_df = new_df[1:].reset_index(drop=True)
     return new_df
+
+def translate_headers(df):
+    df_ro = pd.DataFrame(columns=ro_headers)
+    count = 1
+    # leeres DF füllen
+    for idx, row in df.iterrows():
+        new_row = {}
+        for old_col, new_col in translate_map.items():
+            if old_col in df.columns:
+                # Hochzählen wenn fehlt
+                if old_col == "No" and row[old_col] == "":
+                    row[old_col] = count
+                new_row[new_col] = row[old_col]
+            else:
+                new_row[new_col] = None
+        count += 1
+        # alle anderen Spalten bleiben leer
+        for col in ro_headers:
+            new_row.setdefault(col, None)
+
+        df_ro.loc[idx] = new_row
+    return df_ro

@@ -20,6 +20,8 @@ def main():
     print("- trapo-km: Das Rosi-Spezial :) Sortiert eine Tabelle nach Entfernungen der angegeben Adressen")
     print("- trapo-kombi: Kombiniert mehrere Tabellen zu einer")
     print("- trapo-komplett: Macht alles auf einmal! Ein Start, eine Datei am Ende, alles erledigt!")
+    print("- trapo-ro: Erstellt eine Excel-Liste mit rumänischen Titeln aus der Trapotabelle")
+    print("- trapo-split: Trennt die Tabelle basierend auf der Zellfarbe in die einzelnen Routentabellen")
 
 
 def compare():
@@ -148,9 +150,23 @@ def combine():
     print(f"Fertig! Die Datei liegt unter '{path}'")
 
 
-def do_all():
-    print("Dies ist nur ein Dummy, hier passiert noch nichts.")
+def translate():
+    print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
+    print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
+    file1 = io_helpers.get_file_ui()
+    df1, _ = io_helpers.read_file(file1, False)
+    df1 = table_helpers.translate_headers(df1)
+    io_helpers.save_ro_excel(df1, file1)
+    print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
 
+
+def split():
+    print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
+    print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
+    file1 = io_helpers.get_file_ui()
+    df1, _ = io_helpers.read_file(file1, True)
+    # TODO
+    print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
 
 if __name__ == "__main__":
     main()
