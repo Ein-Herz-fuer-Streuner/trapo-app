@@ -153,10 +153,10 @@ def combine():
 def translate():
     print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
     print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
-    file1 = io_helpers.get_file_ui()
-    df1, _ = io_helpers.read_file(file1, False)
-    df1 = table_helpers.translate_headers(df1)
-    io_helpers.save_ro_excel(df1, file1)
+    files = io_helpers.get_several_files_ui()
+    dfs, _ = io_helpers.read_files(files, False)
+    dfs = table_helpers.translate_headers(dfs)
+    io_helpers.save_ro_excel(dfs, files)
     print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
 
 

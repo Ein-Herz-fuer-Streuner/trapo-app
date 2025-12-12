@@ -675,24 +675,27 @@ def insert_headers(df):
     # new_df = new_df[1:].reset_index(drop=True)
     return new_df
 
-def translate_headers(df):
-    df_ro = pd.DataFrame(columns=ro_headers)
-    count = 1
-    # leeres DF füllen
-    for idx, row in df.iterrows():
-        new_row = {}
-        for old_col, new_col in translate_map.items():
-            if old_col in df.columns:
-                # Hochzählen wenn fehlt
-                if old_col == "No" and row[old_col] == "":
-                    row[old_col] = count
-                new_row[new_col] = row[old_col]
-            else:
-                new_row[new_col] = None
-        count += 1
-        # alle anderen Spalten bleiben leer
-        for col in ro_headers:
-            new_row.setdefault(col, None)
+def translate_headers(dfs):
+    results = []
+    for df in dfs:
+        df_ro = pd.DataFrame(columns=ro_headers)
+        count = 1
+        # leeres DF füllen
+        for idx, row in df.iterrows():
+            new_row = {}
+            for old_col, new_col in translate_map.items():
+                if old_col in df.columns:
+                    # Hochzählen wenn fehlt
+                    if old_col == "No" and row[old_col] == "":
+                        row[old_col] = count
+                    new_row[new_col] = row[old_col]
+                else:
+                    new_row[new_col] = None
+            count += 1
+            # alle anderen Spalten bleiben leer
+            for col in ro_headers:
+                new_row.setdefault(col, None)
 
-        df_ro.loc[idx] = new_row
-    return df_ro
+            df_ro.loc[idx] = new_row
+        results.append(df_ro)
+    return results

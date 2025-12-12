@@ -458,55 +458,56 @@ def save_distance_sheets(paths, dfs, img_banks, img_column="Photo", max_img_size
 
     # function end
 
-def save_ro_excel(df, file_path):
-    _, fname = os.path.split(file_path)
-    base, _ = os.path.splitext(fname)
-    out_xlsx = f"{base}.xlsx"
+def save_ro_excel(dfs, files):
+    for df, file_path in zip(dfs, files):
+        _, fname = os.path.split(file_path)
+        base, _ = os.path.splitext(fname)
+        out_xlsx = f"{base}.xlsx"
 
-    with pd.ExcelWriter(out_xlsx, engine='xlsxwriter') as writer:
-        workbook = writer.book
-        worksheet = workbook.add_worksheet('Sheet1')
-        writer.sheets['Sheet1'] = worksheet
+        with pd.ExcelWriter(out_xlsx, engine='xlsxwriter') as writer:
+            workbook = writer.book
+            worksheet = workbook.add_worksheet('Sheet1')
+            writer.sheets['Sheet1'] = worksheet
 
-        # Format für Titel
-        title_format = workbook.add_format({
-            'bold': True,
-            'align': 'center',
-            'valign': 'vcenter',
-        })
+            # Format für Titel
+            title_format = workbook.add_format({
+                'bold': True,
+                'align': 'center',
+                'valign': 'vcenter',
+            })
 
-        # 1. Titelzeile einfügen
-        last_col = len(df.columns)
-        worksheet.merge_range(0, 0, 0, last_col - 1, ro_header, title_format)
+            # 1. Titelzeile einfügen
+            last_col = len(df.columns)
+            worksheet.merge_range(0, 0, 0, last_col - 1, ro_header, title_format)
 
-        # 2. Tabellenformat für zentrierte Zellen
-        cell_format = workbook.add_format({
-            'align': 'center',
-            'valign': 'vcenter'
-        })
+            # 2. Tabellenformat für zentrierte Zellen
+            cell_format = workbook.add_format({
+                'align': 'center',
+                'valign': 'vcenter'
+            })
 
-        # 2. DataFrame darunter schreiben
-        df_start_row = 1
-        df.to_excel(writer, sheet_name='Sheet1', startrow=df_start_row, index=False)
+            # 2. DataFrame darunter schreiben
+            df_start_row = 1
+            df.to_excel(writer, sheet_name='Sheet1', startrow=df_start_row, index=False)
 
-        # 3. Alle Spalten zentrieren + Breite automatisch
-        for i, col in enumerate(df.columns):
-            max_len = max(df[col].astype(str).map(len).max(), len(col))
-            worksheet.set_column(i, i, max_len, cell_format)
+            # 3. Alle Spalten zentrieren + Breite automatisch
+            for i, col in enumerate(df.columns):
+                max_len = max(df[col].astype(str).map(len).max(), len(col))
+                worksheet.set_column(i, i, max_len, cell_format)
 
-        # 4. Untere Zeile einfügen
-        bottom_row = df_start_row + len(df) + 1
-        bottom_format = workbook.add_format({
-            'align': 'center',
-            'valign': 'vcenter'
-        })
+            # 4. Untere Zeile einfügen
+            bottom_row = df_start_row + len(df) + 1
+            bottom_format = workbook.add_format({
+                'align': 'center',
+                'valign': 'vcenter'
+            })
 
-        # Linke drei Spalten mergen
-        if last_col >= 3:
-            worksheet.merge_range(bottom_row, 0, bottom_row, 2, footer_left, bottom_format)
-        # Rechte drei Spalten mergen
-        if last_col >= 6:
-            worksheet.merge_range(bottom_row, last_col - 3, bottom_row, last_col - 1, footer_right,
-                                    bottom_format)
-        elif last_col > 3:  # Falls insgesamt <6 Spalten, rechtes Merge ab Spalte 3
-            worksheet.merge_range(bottom_row, 3, bottom_row, last_col - 1, footer_right, bottom_format)
+            # Linke drei Spalten mergen
+            if last_col >= 3:
+                worksheet.merge_range(bottom_row, 0, bottom_row, 2, footer_left, bottom_format)
+            # Rechte drei Spalten mergen
+            if last_col >= 6:
+                worksheet.merge_range(bottom_row, last_col - 3, bottom_row, last_col - 1, footer_right,
+                                        bottom_format)
+            elif last_col > 3:  # Falls insgesamt <6 Spalten, rechtes Merge ab Spalte 3
+                worksheet.merge_range(bottom_row, 3, bottom_row, last_col - 1, footer_right, bottom_format)
