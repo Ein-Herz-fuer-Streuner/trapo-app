@@ -241,10 +241,10 @@ def compare_contact(cont1, cont2):
                 ss1 = s1.split(" ")
                 ss2 = s2.split(" ")
                 if len(ss1) < 2:
-                    print("Datei 1: Oh oh, hier ist was schief gelaufen, bitte überprüfen und neustarten:", cont1)
+                    print("Datei 1: Oh oh, hier ist was schief gelaufen, bitte überprüfen und neustarten:", s1)
                     sys.exit(0)
                 if len(ss2) < 2:
-                    print("Datei 2: Oh oh, hier ist was schief gelaufen, bitte überprüfen und neustarten:", cont1)
+                    print("Datei 2: Oh oh, hier ist was schief gelaufen, bitte überprüfen und neustarten:", s2)
                     sys.exit(0)
                 plz1 = ss1[0].strip()
                 plz2 = ss2[0].strip()

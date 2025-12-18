@@ -43,7 +43,10 @@ def get_coordinates(address):
     url = "https://photon.komoot.io/api/"
     params = {"q": address, "limit": 1}
     try:
-        res = requests.get(url, params=params, timeout=5)
+        headers = {
+            "User-Agent": "TrapoApp/1.0.19"
+        }
+        res = requests.get(url, params=params, timeout=5, headers=headers)
         res.raise_for_status()
         data = res.json()
         if data.get("features"):
