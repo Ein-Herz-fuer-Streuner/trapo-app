@@ -684,6 +684,7 @@ def insert_headers(df):
 def translate_headers(dfs):
     results = []
     for df in dfs:
+        df['Name'] = df['Name'].apply(clean_name)
         df_ro = pd.DataFrame(columns=ro_headers)
         count = 1
         # leeres DF füllen
