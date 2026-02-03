@@ -47,33 +47,45 @@ def extract_table_data(files):
         contact = ""
         chips = []
         kennzeichen = ""
-        for row in rows:
-            if "IMSOC" in row:
-                row = row.split("Bezugsnummer ")[1]
-                if row.startswith("N"):
-                    row = "I" + row
-                intra = row
-            elif "Bestimmungsort" in row:
-                row = row.split("Name ")[1]
-                row = row.split(" ISO")[0]
-                row = row.replace(" Adresse ", ";")
-                match = re.match(r"(.+);(.*\d+\s?[a-zA-Z]?)\s(\d{4,}\s.+)", row)
-                if not match:
-                    print("Fehler bei Datei und Zeile:", file, row)
-                    continue
-                row = match.group(1) + ", " + match.group(2) + ", " + match.group(3)
-                contact = row
-            elif "Identifikationsnummer" in row:
-                row = row.split("Identifikationsnummer ")[1]
-                row = row.replace("Microchip ", "")
-                chips.append(row)
-            elif "| Rumänien" in row:
-                row = row.split(" |")[0]
-                kennzeichen = row.split(" ")[-1]
+        try:
+            for row in rows:
+                if "IMSOC" in row:
+                    row_tmp = row.split("Bezugsnummer ")
+                    if len(row_tmp) < 2:
+                        print("Fehler: Datei hat keine Bezugsnummer:", file)
+                        continue
+                    row = row_tmp[1]
+                    if row.startswith("N"):
+                        row = "I" + row
+                    intra = row
+                elif "Bestimmungsort" in row:
+                    row = row.split("Name ")[1]
+                    row = row.split(" ISO")[0]
+                    row = row.replace(" Adresse ", ";")
+                    match = re.match(r"(.+);(.*\d+\s?[a-zA-Z]?)\s(\d{4,}\s.+)", row)
+                    if not match:
+                        print("Fehler: Kein Bestimmungsort bei Datei:", file)
+                        continue
+                    row = match.group(1) + ", " + match.group(2) + ", " + match.group(3)
+                    contact = row
+                elif "Identifikationsnummer" in row:
+                    row_tmp = row.split("Identifikationsnummer ")
+                    if len(row_tmp) < 2:
+                        print("Fehler: Datei hat keine Identifikationsnummer:", file)
+                        continue
+                    row = row_tmp[1]
+                    print(row)
+                    row = row.replace("Microchip ", "")
+                    chips.append(row)
+                elif "| Rumänien" in row:
+                    row = row.split(" |")[0]
+                    kennzeichen = row.split(" ")[-1]
+        except Exception as err:
+            print("Fehler bei Datei und Zeile:", file, "\n", row, "\n", err)
+            continue
 
         for chip in chips:
-            results.append([file, intra, str(chip), contact, kennzeichen])
-
+                results.append([file, intra, str(chip), contact, kennzeichen])
     return results
 
 

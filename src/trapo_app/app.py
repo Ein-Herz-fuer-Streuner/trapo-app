@@ -47,8 +47,7 @@ def compare():
 
 def extract():
     print("Gib den Pfad zum Ordner an, in dem alle Traces-Dokumente liegen, z.B. './data/traces'")
-    path = io_helpers.get_path()
-    pdfs = io_helpers.get_files(path, ".pdf")
+    pdfs = io_helpers.get_several_files_ui(".pdf")
     if len(pdfs) == 0:
         print("Keine PDFs gefunden")
         sys.exit(1)
@@ -112,7 +111,7 @@ def distance():
     print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
     print(
         "Wähle im sich gleich öffnenden Fenster alle Dateien aus, für die du die Entfernung berechnen willst. Kehre danach hierhin zurück.")
-    files = io_helpers.get_several_files_ui()
+    files = io_helpers.get_several_files_ui("")
     dfs, imgs = io_helpers.read_files(files, True)
     print("Gib als jetzt den Pfad zur Kennzeichen-Datei ein, z.B. './data/kennzeichen.csv'")
     file1 = io_helpers.get_file_ui()
@@ -134,7 +133,7 @@ def distance():
 def combine():
     print(
         "Wähle im sich gleich öffnenden Fenster alle Dateien aus, die du kombinieren willst. Kehre danach hierhin zurück.")
-    files = io_helpers.get_several_files_ui()
+    files = io_helpers.get_several_files_ui("")
     dfs, _ = io_helpers.read_files(files, False)
     df = table_helpers.combine_dfs(dfs)
     path = os.path.abspath(os.path.join(".", "Trapo_Kombiniert.xlsx"))
@@ -153,7 +152,7 @@ def combine():
 def translate():
     print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
     print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
-    files = io_helpers.get_several_files_ui()
+    files = io_helpers.get_several_files_ui("")
     dfs, _ = io_helpers.read_files(files, False)
     dfs = table_helpers.translate_headers(dfs)
     io_helpers.save_ro_excel(dfs, files)

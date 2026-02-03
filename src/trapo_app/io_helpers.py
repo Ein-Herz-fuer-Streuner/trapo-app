@@ -81,13 +81,19 @@ def read_file(path, images):
     return df, imgs
 
 
-def get_several_files_ui():
+def get_several_files_ui(ending):
     root = tk.Tk()
     root.withdraw()
-    file_paths = filedialog.askopenfilenames(
-        title="Wähle mehrere Word- oder Exceltabellen aus",
-        filetypes=[("Word- und Excel-Dateien", "*.docx *.xlsx *.xls")]
-    )
+    if ending == "":
+        file_paths = filedialog.askopenfilenames(
+            title="Wähle mehrere Word- oder Exceltabellen aus",
+            filetypes=[("Word- und Excel-Dateien", "*.docx *.xlsx *.xls")]
+        )
+    else:
+        file_paths = filedialog.askopenfilenames(
+            title="Wähle mehrere Dateien aus",
+            filetypes=[("Dateien", ending)]
+        )
     return list(file_paths)
 
 
