@@ -6,18 +6,268 @@ import unicodedata
 from io import BytesIO
 from pathlib import Path
 from tkinter import filedialog
-from openpyxl import load_workbook
-from openpyxl.styles import Alignment
 
 import pandas as pd
 from PIL import Image
 from docx import Document
 from docx.oxml.ns import qn
 
-
 ro_header = "CHIPLIST EUROPA"
 footer_left = "Data si ora plecarii"
 footer_right = "Numele transportatorului"
+# ──────────────────────────────────────────────
+#  Farb-Palette
+# ──────────────────────────────────────────────
+BG = "#F7F7F8"
+PANEL_BG = "#FFFFFF"
+ACCENT = "#5B6AF0"  # Blau-Violett
+ACCENT_DARK = "#434FC4"
+SUCCESS = "#22C55E"
+SUCCESS_DK = "#16A34A"
+TEXT = "#1A1A2E"
+MUTED = "#8B8FA8"
+BORDER = "#E2E4EE"
+SELECTED_BG = "#EEF0FD"
+DRAG_BG = "#D6DAF8"
+BTN_BG = "#EDEDF5"
+BTN_HOVER = "#DDDDF0"
+
+
+class ReorderableListApp:
+    """
+    Tkinter-Fenster mit einer umsortierbare Liste.
+
+    Verwendung:
+        root = tk.Tk()
+        app  = ReorderableListApp(root, ["Apfel", "Banane", "Kirsche"])
+        root.mainloop()
+        print(app.result)   # finale Reihenfolge als Liste
+    """
+
+    def __init__(self, root: tk.Tk, items: list[str]):
+        self.root = root
+        self.items = list(items)
+        self.result = None
+
+        self._drag_start_idx: int | None = None
+
+        self._configure_window()
+        self._build_ui()
+
+    # ──────────────────────────────────────────
+    #  Fenster-Konfiguration
+    # ──────────────────────────────────────────
+
+    def _configure_window(self):
+        self.root.title("Liste sortieren")
+        self.root.geometry("440x560")
+        self.root.minsize(360, 400)
+        self.root.configure(bg=BG)
+        self.root.resizable(True, True)
+
+        # Fenster zentrieren
+        self.root.update_idletasks()
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        w, h = 440, 560
+        self.root.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+
+    # ──────────────────────────────────────────
+    #  UI aufbauen
+    # ──────────────────────────────────────────
+
+    def _build_ui(self):
+        # ── Header ──────────────────────────────
+        hdr_frame = tk.Frame(self.root, bg=ACCENT, pady=18)
+        hdr_frame.pack(fill=tk.X)
+
+        tk.Label(
+            hdr_frame, text="Reihenfolge anpassen",
+            font=("Helvetica", 15, "bold"),
+            bg=ACCENT, fg="white"
+        ).pack()
+
+        tk.Label(
+            hdr_frame,
+            text="Drag & Drop · Pfeiltasten · ↑↓ Buttons",
+            font=("Helvetica", 9),
+            bg=ACCENT, fg="#C7CCFA"
+        ).pack(pady=(2, 0))
+
+        # ── Inhaltsbereich ───────────────────────
+        content = tk.Frame(self.root, bg=BG, padx=20, pady=16)
+        content.pack(fill=tk.BOTH, expand=True)
+
+        # ── Listbox + Scrollbar ───────────────────
+        list_frame = tk.Frame(content, bg=BORDER, bd=0)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Innerer Rahmen mit weißem Hintergrund
+        inner = tk.Frame(list_frame, bg=PANEL_BG, bd=0)
+        inner.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+
+        self.listbox = tk.Listbox(
+            inner,
+            font=("Helvetica", 11),
+            bg=PANEL_BG,
+            fg=TEXT,
+            selectbackground=SELECTED_BG,
+            selectforeground=TEXT,
+            activestyle="none",
+            relief=tk.FLAT,
+            highlightthickness=0,
+            borderwidth=0,
+            selectborderwidth=0,
+            cursor="hand2",
+        )
+
+        scrollbar = tk.Scrollbar(
+            inner, orient=tk.VERTICAL,
+            command=self.listbox.yview,
+            troughcolor=BG, bg=BORDER,
+        )
+        self.listbox.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # ── Zeiger-Buttons ────────────────────────
+        btn_row = tk.Frame(content, bg=BG, pady=12)
+        btn_row.pack(fill=tk.X)
+
+        self._mk_btn(btn_row, "↑  Nach oben", self.move_up).pack(side=tk.LEFT, padx=(0, 6))
+        self._mk_btn(btn_row, "↓  Nach unten", self.move_down).pack(side=tk.LEFT)
+
+        # ── Fertig-Button ─────────────────────────
+        done_btn = tk.Button(
+            content,
+            text="✓   Fertig",
+            font=("Helvetica", 12, "bold"),
+            bg=SUCCESS, fg="black",
+            activebackground=SUCCESS_DK, activeforeground="white",
+            relief=tk.FLAT, cursor="hand2",
+            padx=24, pady=10,
+            command=self._on_done,
+        )
+        done_btn.pack(fill=tk.X)
+        self._add_hover(done_btn, SUCCESS, SUCCESS_DK)
+
+        # ── Listbox füllen & Bindings ─────────────
+        self._refresh(keep_selection=None)
+
+        self.listbox.bind("<ButtonPress-1>", self._drag_start)
+        self.listbox.bind("<B1-Motion>", self._drag_motion)
+        self.listbox.bind("<ButtonRelease-1>", self._drag_release)
+        self.listbox.bind("<Up>", lambda _: self.move_up())
+        self.listbox.bind("<Down>", lambda _: self.move_down())
+        self.root.bind("<Return>", lambda _: self._on_done())
+
+    # ──────────────────────────────────────────
+    #  Hilfsmethoden UI
+    # ──────────────────────────────────────────
+
+    def _mk_btn(self, parent, label: str, cmd) -> tk.Button:
+        btn = tk.Button(
+            parent, text=label,
+            font=("Helvetica", 10),
+            bg=BTN_BG, fg=TEXT,
+            activebackground=BTN_HOVER, activeforeground=TEXT,
+            relief=tk.FLAT, cursor="hand2",
+            padx=14, pady=7,
+            command=cmd,
+        )
+        self._add_hover(btn, BTN_BG, BTN_HOVER)
+        return btn
+
+    @staticmethod
+    def _add_hover(widget: tk.Widget, normal: str, hover: str):
+        widget.bind("<Enter>", lambda _: widget.configure(bg=hover))
+        widget.bind("<Leave>", lambda _: widget.configure(bg=normal))
+
+    # ──────────────────────────────────────────
+    #  Listbox aktualisieren
+    # ──────────────────────────────────────────
+
+    def _refresh(self, keep_selection: int | None):
+        """Listbox neu zeichnen, Auswahl ggf. wiederherstellen."""
+        self.listbox.delete(0, tk.END)
+        for i, item in enumerate(self.items):
+            # Nummeriertes Label
+            self.listbox.insert(tk.END, f"  {i + 1:>2}.  {item}")
+
+        if keep_selection is not None:
+            idx = max(0, min(keep_selection, len(self.items) - 1))
+            self.listbox.select_set(idx)
+            self.listbox.see(idx)
+            self.listbox.activate(idx)
+
+    # ──────────────────────────────────────────
+    #  Verschiebe-Logik
+    # ──────────────────────────────────────────
+
+    def _current(self) -> int | None:
+        sel = self.listbox.curselection()
+        return sel[0] if sel else None
+
+    def move_up(self):
+        idx = self._current()
+        if idx is None or idx == 0:
+            return
+        self.items[idx - 1], self.items[idx] = self.items[idx], self.items[idx - 1]
+        self._refresh(idx - 1)
+
+    def move_down(self):
+        idx = self._current()
+        if idx is None or idx >= len(self.items) - 1:
+            return
+        self.items[idx + 1], self.items[idx] = self.items[idx], self.items[idx + 1]
+        self._refresh(idx + 1)
+
+    # ──────────────────────────────────────────
+    #  Drag & Drop
+    # ──────────────────────────────────────────
+
+    def _drag_start(self, event: tk.Event):
+        self._drag_start_idx = self.listbox.nearest(event.y)
+        self.listbox.select_clear(0, tk.END)
+        self.listbox.select_set(self._drag_start_idx)
+
+    def _drag_motion(self, event: tk.Event):
+        if self._drag_start_idx is None:
+            return
+        target = self.listbox.nearest(event.y)
+        if target != self._drag_start_idx:
+            self.items[self._drag_start_idx], self.items[target] = (
+                self.items[target],
+                self.items[self._drag_start_idx],
+            )
+            self._drag_start_idx = target
+            self._refresh(target)
+
+    def _drag_release(self, _event: tk.Event):
+        self._drag_start_idx = None
+
+    # ──────────────────────────────────────────
+    #  Abschluss
+    # ──────────────────────────────────────────
+
+    def _on_done(self):
+        self.result = list(self.items)
+        self.root.quit()
+
+    def get_result(self) -> list[str]:
+        """Gibt die finale Liste zurück (nach mainloop)."""
+        return self.result if self.result is not None else self.items
+
+
+def get_sorted_TPs(tps):
+    root = tk.Tk()
+    app = ReorderableListApp(root, tps)
+    root.mainloop()
+    root.destroy()
+    # ── Ab hier steht die sortierte Liste zur Verfügung ──
+    ergebnis = app.get_result()
+    return ergebnis
 
 
 def get_files(dir_, ending):
@@ -334,7 +584,7 @@ def save_distance_sheets(paths, dfs, img_banks, img_column="Photo", max_img_size
                 'font_color': 'white',
                 'align': 'center',
                 'valign': 'vcenter',
-                'bg_color': '#294879',   # light blue background
+                'bg_color': '#294879',  # light blue background
                 'font_size': 12
             })
 
@@ -464,6 +714,7 @@ def save_distance_sheets(paths, dfs, img_banks, img_column="Photo", max_img_size
 
     # function end
 
+
 def save_ro_excel(dfs, files):
     for df, file_path in zip(dfs, files):
         _, fname = os.path.split(file_path)
@@ -514,6 +765,49 @@ def save_ro_excel(dfs, files):
             # Rechte drei Spalten mergen
             if last_col >= 6:
                 worksheet.merge_range(bottom_row, last_col - 3, bottom_row, last_col - 1, footer_right,
-                                        bottom_format)
+                                      bottom_format)
             elif last_col > 3:  # Falls insgesamt <6 Spalten, rechtes Merge ab Spalte 3
                 worksheet.merge_range(bottom_row, 3, bottom_row, last_col - 1, footer_right, bottom_format)
+
+
+def sort_word_table(input_path, output_path, sort_column, sort_order):
+    """
+    Sortiert eine Word-Tabelle nach vorgegebener Reihenfolge.
+    Alle Zellformatierungen bleiben 1:1 erhalten.
+
+    sort_column: Index der Spalte nach der sortiert wird (0-basiert)
+    sort_order:  gewünschte Reihenfolge als Liste, z.B. ["München", "Berlin", "Hamburg"]
+    """
+    doc   = Document(input_path)
+    table = doc.tables[0]
+    tbl   = table._tbl
+
+    # Alle Zeilen-Elemente holen
+    rows = tbl.findall(qn('w:tr'))
+    header    = rows[0]        # Header unangetastet lassen
+    data_rows = rows[1:]       # Nur Datenzeilen sortieren
+
+    def row_key(tr):
+        """Gibt den Textwert der Sort-Spalte zurück."""
+        cells = tr.findall(qn('w:tc'))
+        if sort_column >= len(cells):
+            return len(sort_order)   # unbekannte ans Ende
+        text = ''.join(
+            t.text for t in cells[sort_column].iter(qn('w:t'))
+            if t.text
+        ).strip()
+        try:
+            return sort_order.index(text)
+        except ValueError:
+            return len(sort_order)   # nicht in sort_order → ans Ende
+
+    # Zeilen umsortieren
+    for tr in data_rows:
+        tbl.remove(tr)
+
+    sorted_rows = sorted(data_rows, key=row_key)
+
+    for tr in sorted_rows:
+        tbl.append(tr)
+
+    doc.save(output_path)

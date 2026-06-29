@@ -706,3 +706,11 @@ def translate_headers(dfs):
             df_ro.loc[idx] = new_row
         results.append(df_ro)
     return results
+
+def sort_df_by_sorter(df, sorter):
+    sorter_index = dict(zip(sorter, range(len(sorter))))
+    df['Tp_Rank'] = df['Treffpunkt'].map(sorter_index)
+    df.sort_values(['Tp_Rank'],
+                   ascending=[True], inplace=True)
+    df = df.drop(columns=['Tp_Rank'])
+    return df

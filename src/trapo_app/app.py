@@ -22,6 +22,7 @@ def main():
     print("- trapo-komplett: Macht alles auf einmal! Ein Start, eine Datei am Ende, alles erledigt!")
     print("- trapo-ro: Erstellt eine Excel-Liste mit rumänischen Titeln aus der Trapotabelle")
     print("- trapo-split: Trennt die Tabelle basierend auf der Zellfarbe in die einzelnen Routentabellen")
+    print("- trapo-sort: Sortiert die Tabelle basierend auf der eingegebenen Reihenfolge der Treffpunkte")
 
 
 def compare():
@@ -165,6 +166,28 @@ def split():
     file1 = io_helpers.get_file_ui()
     df1, _ = io_helpers.read_file(file1, True)
     # TODO
+    print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
+
+def sort_by_tp():
+    print("Gib als erstes den Pfad zur Datei aus dem Messenger ein, z.B. './data/chat.docx'")
+    print("WICHTIG: BITTE GIB DER ADRESSENSPALTE DEN NAMEN 'KONTAKT'!")
+    file1 = io_helpers.get_file_ui()
+    df1, _ = io_helpers.read_file(file1, False)
+    # get unique items from df
+    meeting_points = df1['Treffpunkt'].unique()
+    # user sort UI
+    sorted_tps = io_helpers.get_sorted_TPs(meeting_points)
+    # list save
+    _, fname = os.path.split(file1)
+    base, _ = os.path.splitext(fname)
+    out_word = f"{base}_sortiert.docx"
+    path = os.path.abspath(os.path.join(".", out_word))
+    io_helpers.sort_word_table(
+    file1,
+    path,
+    sort_column=19,                              # welche Spalte zum Sortieren
+    sort_order=sorted_tps
+)
     print(f"Fertig! Die Datei liegt im Ordner '{os.path.abspath(".")}'")
 
 if __name__ == "__main__":
