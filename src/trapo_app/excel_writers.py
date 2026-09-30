@@ -153,7 +153,7 @@ def _insert_images(worksheet, img_col_idx, img_keys, excel_rows, img_registry, m
 def save_ro_excel(dfs, files):
     """Speichert je Eingabedatei eine Excel-Datei mit Titel- und Fußzeile für Rumänien."""
     for df, file_path in zip(dfs, files):
-        _save_ro_sheet(_output_name(file_path), df)
+        _save_ro_sheet(_output_name(file_path, "_ro"), df)
 
 
 def _save_ro_sheet(out_path, df):

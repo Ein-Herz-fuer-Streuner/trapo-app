@@ -51,7 +51,7 @@ def test_ro_sheet_has_title_and_footer(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     df = pd.DataFrame(columns=table_helpers.RO_HEADERS, data=[["1"] + [None] * 16])
     excel_writers.save_ro_excel([df], ["liste.docx"])
-    ws = openpyxl.load_workbook(tmp_path / "liste.xlsx").active
+    ws = openpyxl.load_workbook(tmp_path / "liste_ro.xlsx").active
     assert ws["A1"].value == excel_writers.RO_TITLE
     assert ws["A4"].value == excel_writers.RO_FOOTER_LEFT
     assert ws.cell(4, len(table_helpers.RO_HEADERS) - 2).value == excel_writers.RO_FOOTER_RIGHT
