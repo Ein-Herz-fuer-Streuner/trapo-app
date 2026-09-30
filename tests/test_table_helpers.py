@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from trapo_app import table_helpers as th
+from trapo_app.errors import TrapoError
 
 
 class TestCleanName:
@@ -32,7 +33,7 @@ class TestCleanDob:
         assert th.clean_dob(raw) == expected
 
     def test_invalid_date_aborts(self):
-        with pytest.raises(SystemExit):
+        with pytest.raises(TrapoError):
             th.clean_dob("someday")
 
 
@@ -44,8 +45,11 @@ class TestCleanContact:
     def test_keeps_words_containing_und(self):
         assert th.clean_contact("Anna Grund\nGrundstraße 4\n12345 Hund") == "Anna Grund, Grundstraße 4, 12345 Hund"
 
-    def test_replaces_standalone_und_and_u_dot(self):
-        assert th.clean_contact("Max u. Erika\nHauptstraße 5\n12345 Berlin").startswith("Max & Erika")
+    def test_replaces_standalone_und(self):
+        assert th.clean_contact("Max und Erika\nHauptstraße 5\n12345 Berlin").startswith("Max & Erika")
+
+    def test_keeps_initials(self):
+        assert th.clean_contact("Hans u. Erika\nHauptstraße 5\n12345 Berlin").startswith("Hans U. Erika")
 
 
 class TestCompareContact:
@@ -123,4 +127,100 @@ class TestTranslateHeaders:
         out = th.translate_headers([df])[0]
         assert out["Nume"].tolist() == ["Rex", "Bello"]
         assert out["Nr Crt"].tolist() == [1, 2]
-        assert list(out.columns) == th.ro_headers
+        assert list(out.columns) == th.RO_HEADERS
+
+
+class TestBuildFileNameAlignment:
+    def test_old_and_new_stay_paired_when_a_file_gets_no_name(self):
+        df = pd.DataFrame({
+            "Name": ["Rex", "Bello"],
+            "Kontakt": ["Max Mustermann, Weg 1, 12345 Berlin", "Erika Muster, Weg 2, 12345 Berlin"],
+            "Intra": ["INT1", "INT2"],
+            # the first file matches no Intra number and gets no name
+            "Datei": ["/x/unknown.pdf", "/x/INT2_scan.pdf"],
+        })
+        out, old, new = th.build_file_name(df)
+        assert old == ["/x/INT2_scan.pdf"]
+        assert new == ["INT2_Bello_Erika Muster.pdf"]
+        assert out["Datei neu"].tolist() == ["", "INT2_Bello_Erika Muster.pdf"]
+
+
+class TestCompareTraces:
+    def _frames(self, traces_contact):
+        chat = pd.DataFrame({
+            "Name": ["Rex"], "Ort": ["Berlin"], "Chip": ["123"], "DOB": ["01.01.2020"],
+            "Kontakt": ["Max Mustermann, Hauptstraße 5, 12345 Berlin"], th.CHAT_DIFF_COLUMN: [th.OK_MARK],
+        })
+        traces = pd.DataFrame({
+            "Datei": ["a.pdf"], "Intra": ["INT1"], "Chip": ["123"], "Kontakt": [traces_contact],
+            "Kennzeichen": ["B-AB 1"],
+        })
+        return chat, traces
+
+    def test_matching_contact(self):
+        result = th.compare_traces(*self._frames("Max Mustermann, Hauptstraße 5, 12345 Berlin"))
+        assert result[th.TRACES_DIFF_COLUMN].tolist() == [th.OK_MARK]
+
+    def test_different_contact_is_reported(self):
+        result = th.compare_traces(*self._frames("Max Mustermann, Hauptstraße 7, 12345 Berlin"))
+        assert result[th.TRACES_DIFF_COLUMN].iloc[0].startswith("Kontakt (HNr)")
+
+    def test_missing_in_traces_and_chat(self):
+        chat, traces = self._frames("Max Mustermann, Hauptstraße 5, 12345 Berlin")
+        traces["Chip"] = ["999"]
+        result = th.compare_traces(chat, traces)
+        assert sorted(result[th.TRACES_DIFF_COLUMN]) == ["Fehlt in Chat-Datei", "Fehlt in Traces-Dokumenten"]
+
+
+class TestMatchPet:
+    def test_unique_name_wins(self):
+        df = pd.DataFrame({"Name": ["Rex", "Bello"], "Chip": ["1", "2"]})
+        assert th.match_pet(pd.Series({"Name": "Bello", "Chip": "x"}), df)["Chip"] == "2"
+
+    def test_falls_back_to_chip_for_duplicate_names(self):
+        df = pd.DataFrame({"Name": ["Rex", "Rex"], "Chip": ["1", "2"]})
+        assert th.match_pet(pd.Series({"Name": "Rex", "Chip": "2"}), df)["Chip"] == "2"
+
+    def test_empty_chip_never_matches(self):
+        df = pd.DataFrame({"Name": ["Rex", "Bello"], "Chip": ["", ""]})
+        assert th.match_pet(pd.Series({"Name": "Luna", "Chip": ""}), df).empty
+
+
+class TestCompare:
+    def test_reports_differences_and_missing_pets(self):
+        chat = pd.DataFrame({"Name": ["Rex", "Bello"], "Ort": ["Berlin", "Bonn"], "Chip": ["1", "2"],
+                             "DOB": ["01.01.2020", ""],
+                             "Kontakt": ["Max Mustermann\nHauptstr. 5\n12345 Berlin"] * 2})
+        petoffice = pd.DataFrame({"Name": ["Rex", "Luna"], "Ort": ["Berlin", "Bonn"], "Chip": ["1", "3"],
+                                  "DOB": ["02.01.2020", ""],
+                                  "Kontakt": ["Max Mustermann\nHauptstr. 5\n12345 Berlin"] * 2})
+        result = th.compare(chat, petoffice).set_index("Name")[th.CHAT_DIFF_COLUMN]
+        assert result["Rex"] == "DOB: 01.01.2020 \u2192 02.01.2020"
+        assert result["Bello"] == "Fehlt in PetOffice-Datei"
+        assert result["Luna"] == "Fehlt in Chat-Datei"
+
+
+class TestFindStoppForPlate:
+    def test_document_without_known_stop_is_skipped_not_fatal(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "B-AB 1").mkdir()
+        for name in ["Rex", "Bello", "Luna", "Max", "Emma"]:
+            (tmp_path / "B-AB 1" / f"INT_{name}_Person.pdf").touch()
+        names = pd.DataFrame({"Name": ["Rex", "Bello", "Luna", "Max", "Emma"]})
+        result = th.find_stopp_for_plate(["unknown.docx", "31.01.26-NORD-V1.docx"], [names, names], ["B-AB 1"])
+        assert result == [("B-AB 1", "NORD", "31.01.26-NORD-V1.docx")]
+
+
+class TestAddDistance:
+    def test_meeting_points_keep_order_of_appearance_and_sort_by_distance(self, monkeypatch):
+        distances = {"Zed": 10, "Ann": 50, "Bob": 30}
+        monkeypatch.setattr(th.math_helpers, "calculate_distance", lambda row, stopps: distances[row["Name"]])
+        df = pd.DataFrame({
+            "Photo": ["", "", ""], "Name": ["Zed", "Ann", "Bob"], "Kennzeichen": ["", "", ""],
+            "Kontakt": ["", "", ""], "Treffpunkt": ["Zulu", "Alpha", "Zulu"],
+        })
+        out = th.add_distance([df], None)[0]
+        data = out[out["Nr."] != "Nr."]
+        # "Zulu" was seen first, so it stays first even though "Alpha" is alphabetically smaller
+        assert data["Name"].tolist() == ["Bob", "Zed", "Ann"]
+        assert out["Nr."].tolist() == ["Nr.", 1, 2, "Nr.", 1]

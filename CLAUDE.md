@@ -4,35 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Python package (`trapo_app`, Python 3.13 only) that automates the "Trapo" (animal transport) workflow at Ein Herz für Streuner. It is a set of interactive German-language CLI tools that process Word/Excel/PDF files (transport tables from a messenger export, PetOffice exports, Traces PDFs). User-facing text, column names and comments are German; keep new prompts and output in German.
+Python package (`trapo_app`, Python 3.13+) that automates the "Trapo" (animal transport) workflow at Ein Herz für Streuner. It is a set of interactive German-language CLI tools that process Word/Excel/PDF files (transport tables from a messenger export, PetOffice exports, Traces PDFs). User-facing text, column names and comments are German; keep new prompts and output in German.
 
 ## Setup and commands
 
-There is no test suite (`src/test.py` is empty) and no linter config.
-
 ```bash
 python3.13 -m venv .venv && source .venv/bin/activate
-pip install -e .          # installs the console scripts below (requirements.txt is untracked and pins versions)
+pip install -e ".[dev]"   # installs the console scripts below plus pytest
+pytest                    # all tests; single test: pytest tests/test_table_helpers.py::TestCompareContact
 ```
 
-Each CLI command is a function in `src/trapo_app/app.py`, registered in `setup.cfg` under `[options.entry_points]`. Run one during development with e.g. `python -c "from trapo_app.app import compare; compare()"` or the installed script (`trapo-vergleich`, `trapo-extrakt`, `trapo-traces-vergleich`, `trapo-traces`, `trapo-km`, `trapo-kombi`, `trapo-komplett`, `trapo-ro`, `trapo-split`, `trapo-sort`).
+Tests need no Tk and no network (`tests/conftest.py` stubs `tkinter` when it is missing, HTTP calls are monkeypatched). Sample data (`*.xlsx`/`*.docx` in the repo root) is not used by the tests.
 
-Adding a command means: add the function to `app.py`, add the entry point in `setup.cfg`, and list it in `main()`'s help text. The version lives in `src/trapo_app/__init__.py` (`__version__`, read by `setup.cfg`); commits bump it (`... | 1.0.22`).
+Each CLI command is a function in `src/trapo_app/app.py`, registered in `setup.cfg` under `[options.entry_points]` (`trapo-vergleich`, `trapo-extrakt`, `trapo-traces-vergleich`, `trapo-traces`, `trapo-km`, `trapo-kombi`, `trapo-ro`, `trapo-sort`). Run one during development with e.g. `python -c "from trapo_app.app import compare; compare()"`.
+
+Adding a command means: add the function to `app.py` (decorate with `@cli_command`), add the entry point in `setup.cfg`, and list it in `main()`'s help text. The version lives in `src/trapo_app/__init__.py` (`__version__`, read by `setup.cfg` and used in the geocoding User-Agent); commits bump it (`... | 1.0.22`).
 
 ## Architecture
 
-`app.py` only orchestrates: each command prompts the user (via `input()` and Tk file dialogs), calls into the helper modules, and writes an output file (usually `.xlsx` into the current directory).
+`app.py` only orchestrates: each command prompts the user (via `print` and Tk file dialogs), calls into the helper modules, and writes an output file (usually `.xlsx` into the current directory). Helpers never exit the program; they raise `errors.TrapoError` with a German user-facing message, and the `@cli_command` decorator prints it and exits with code 1.
 
-- `io_helpers.py`: all file/UI I/O. Tk file pickers (`get_file_ui`, `get_several_files_ui`), the Tk drag-to-reorder `ReorderableListApp` (used by `trapo-sort`), reading `.docx`/`.xlsx` into DataFrames (`read_file`, `read_docx`, `read_docx_with_images` for photo columns), file renaming/moving for Traces, and the Excel writers (`save_distance_sheets`, `save_ro_excel`) plus `sort_word_table`, which rewrites a Word table in place by a column and a user-defined order.
-- `table_helpers.py`: DataFrame logic. Cleaning/normalizing names, DOBs, contacts, chip numbers; fuzzy matching (thefuzz/rapidfuzz) for `compare` (messenger vs PetOffice) and `compare_traces`; building Traces file names; license-plate extraction and matching (`add_plates`); distance columns (`add_distance`); Romanian header translation (`translate_headers`).
+- `gui.py`: everything Tk. File pickers (`get_file_ui`, `get_several_files_ui`) and the drag-to-reorder `ReorderableListApp` used by `trapo-sort`. Only `app.py` imports it, so the rest of the package works without Tk.
+- `io_helpers.py`: reading `.docx`/`.xlsx`/`.csv` into DataFrames (`read_file`, `read_docx_with_images` for photo columns), renaming/moving Traces files, and `sort_word_table`, which reorders a Word table's rows in place by a column and a user-defined order.
+- `excel_writers.py`: all Excel output through xlsxwriter (`write_df_to_excel`, `save_distance_sheets` for `trapo-km`, `save_ro_excel` for `trapo-ro`).
+- `table_helpers.py`: DataFrame logic. Cleaning names, DOBs, contacts and chips; `compare` (messenger vs PetOffice) and `compare_traces`, both built on `compare_contact`/`match_pet`; Traces file name building; license-plate extraction and fuzzy matching (`add_plates`, rapidfuzz); distance columns and sorting (`add_distance`, `insert_headers`); Romanian header translation (`translate_headers`).
 - `pdf_helpers.py`: extracts table data from Traces PDFs using camelot.
-- `math_helpers.py`: address cleaning, geocoding via geopy/Photon (a custom User-Agent is required, see commit history), and driving distance via OSM (attribution required, see README).
+- `math_helpers.py`: address cleaning, geocoding via Photon and driving distance via OSRM. Requests are throttled to one per second and cached per run; a custom User-Agent is required, and OSM attribution is required (see README).
 
-Typical pipeline: `trapo-vergleich` → `Trapo_Vergleich.xlsx`; `trapo-extrakt` → `Traces_Extrakt.xlsx`; `trapo-traces-vergleich` combines both → `Trapo_Traces_Vergleich.xlsx`; `trapo-traces` renames/moves the Traces PDFs from that table. `trapo-komplett` is meant to chain all steps (`do_all`).
+Typical pipeline: `trapo-vergleich` → `Trapo_Vergleich.xlsx`; `trapo-extrakt` → `Traces_Extrakt.xlsx`; `trapo-traces-vergleich` combines both → `Trapo_Traces_Vergleich.xlsx`; `trapo-traces` renames/moves the Traces PDFs from that table.
 
 ## Gotchas
 
 - The address column in input tables must be named `KONTAKT`; the code depends on it.
-- `entry_points` in `setup.cfg` reference `app.do_all`, `app.translate`, `app.split`, `app.sort_by_tp`, but `do_all` is not defined in `app.py` (so `trapo-komplett` is broken) and `split` is an unfinished `# TODO` stub.
-- `trapo-sort` hardcodes `sort_column=19` (the `Treffpunkt` column index in the Word table).
+- `find_stopp_for_plate` accumulates its 5-match threshold (`MIN_NAME_MATCHES`) across all documents of a plate; this looks odd but is unchanged behaviour.
 - Input and output data files (`*.xlsx`, `*.docx`, `data/`) sit in the repo root but are not source; don't commit them.
