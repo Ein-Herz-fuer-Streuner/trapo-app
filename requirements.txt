@@ -1,0 +1,12 @@
+geopy~=2.4.1
+certifi~=2025.1.31
+requests~=2.32.3
+pandas~=2.2.3
+python-docx~=1.1.2
+camelot-py~=1.0.0
+ftfy~=6.3.1
+thefuzz~=0.22.1
+setuptools~=75.8.2
+openpyxl~=3.1.5
+pillow~=11.1.0
+rapidfuzz
