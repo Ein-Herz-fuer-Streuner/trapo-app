@@ -1,312 +1,19 @@
+"""Einlesen von Tabellen (Word, Excel, CSV) und Verwalten der Traces-Dateien."""
 import glob
 import os
 import shutil
-import tkinter as tk
 import unicodedata
-from io import BytesIO
 from pathlib import Path
-from tkinter import filedialog
 
 import pandas as pd
-from PIL import Image
 from docx import Document
 from docx.oxml.ns import qn
 
-ro_header = "CHIPLIST EUROPA"
-footer_left = "Data si ora plecarii"
-footer_right = "Numele transportatorului"
-# ──────────────────────────────────────────────
-#  Farb-Palette
-# ──────────────────────────────────────────────
-BG = "#F7F7F8"
-PANEL_BG = "#FFFFFF"
-ACCENT = "#5B6AF0"  # Blau-Violett
-ACCENT_DARK = "#434FC4"
-SUCCESS = "#22C55E"
-SUCCESS_DK = "#16A34A"
-TEXT = "#1A1A2E"
-MUTED = "#8B8FA8"
-BORDER = "#E2E4EE"
-SELECTED_BG = "#EEF0FD"
-DRAG_BG = "#D6DAF8"
-BTN_BG = "#EDEDF5"
-BTN_HOVER = "#DDDDF0"
-
-
-class ReorderableListApp:
-    """
-    Tkinter-Fenster mit einer umsortierbare Liste.
-
-    Verwendung:
-        root = tk.Tk()
-        app  = ReorderableListApp(root, ["Apfel", "Banane", "Kirsche"])
-        root.mainloop()
-        print(app.result)   # finale Reihenfolge als Liste
-    """
-
-    def __init__(self, root: tk.Tk, items: list[str]):
-        self.root = root
-        self.items = list(items)
-        self.result = None
-
-        self._drag_start_idx: int | None = None
-
-        self._configure_window()
-        self._build_ui()
-
-    # ──────────────────────────────────────────
-    #  Fenster-Konfiguration
-    # ──────────────────────────────────────────
-
-    def _configure_window(self):
-        self.root.title("Liste sortieren")
-        self.root.geometry("440x560")
-        self.root.minsize(360, 400)
-        self.root.configure(bg=BG)
-        self.root.resizable(True, True)
-
-        # Fenster zentrieren
-        self.root.update_idletasks()
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
-        w, h = 440, 560
-        self.root.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
-
-    # ──────────────────────────────────────────
-    #  UI aufbauen
-    # ──────────────────────────────────────────
-
-    def _build_ui(self):
-        # ── Header ──────────────────────────────
-        hdr_frame = tk.Frame(self.root, bg=ACCENT, pady=18)
-        hdr_frame.pack(fill=tk.X)
-
-        tk.Label(
-            hdr_frame, text="Reihenfolge anpassen",
-            font=("Helvetica", 15, "bold"),
-            bg=ACCENT, fg="white"
-        ).pack()
-
-        tk.Label(
-            hdr_frame,
-            text="Drag & Drop · Pfeiltasten · ↑↓ Buttons",
-            font=("Helvetica", 9),
-            bg=ACCENT, fg="#C7CCFA"
-        ).pack(pady=(2, 0))
-
-        # ── Inhaltsbereich ───────────────────────
-        content = tk.Frame(self.root, bg=BG, padx=20, pady=16)
-        content.pack(fill=tk.BOTH, expand=True)
-
-        # ── Listbox + Scrollbar ───────────────────
-        list_frame = tk.Frame(content, bg=BORDER, bd=0)
-        list_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Innerer Rahmen mit weißem Hintergrund
-        inner = tk.Frame(list_frame, bg=PANEL_BG, bd=0)
-        inner.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
-
-        self.listbox = tk.Listbox(
-            inner,
-            font=("Helvetica", 11),
-            bg=PANEL_BG,
-            fg=TEXT,
-            selectbackground=SELECTED_BG,
-            selectforeground=TEXT,
-            activestyle="none",
-            relief=tk.FLAT,
-            highlightthickness=0,
-            borderwidth=0,
-            selectborderwidth=0,
-            cursor="hand2",
-        )
-
-        scrollbar = tk.Scrollbar(
-            inner, orient=tk.VERTICAL,
-            command=self.listbox.yview,
-            troughcolor=BG, bg=BORDER,
-        )
-        self.listbox.configure(yscrollcommand=scrollbar.set)
-
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # ── Zeiger-Buttons ────────────────────────
-        btn_row = tk.Frame(content, bg=BG, pady=12)
-        btn_row.pack(fill=tk.X)
-
-        self._mk_btn(btn_row, "↑  Nach oben", self.move_up).pack(side=tk.LEFT, padx=(0, 6))
-        self._mk_btn(btn_row, "↓  Nach unten", self.move_down).pack(side=tk.LEFT)
-
-        # ── Fertig-Button ─────────────────────────
-        done_btn = tk.Button(
-            content,
-            text="✓   Fertig",
-            font=("Helvetica", 12, "bold"),
-            bg=SUCCESS, fg="black",
-            activebackground=SUCCESS_DK, activeforeground="white",
-            relief=tk.FLAT, cursor="hand2",
-            padx=24, pady=10,
-            command=self._on_done,
-        )
-        done_btn.pack(fill=tk.X)
-        self._add_hover(done_btn, SUCCESS, SUCCESS_DK)
-
-        # ── Listbox füllen & Bindings ─────────────
-        self._refresh(keep_selection=None)
-
-        self.listbox.bind("<ButtonPress-1>", self._drag_start)
-        self.listbox.bind("<B1-Motion>", self._drag_motion)
-        self.listbox.bind("<ButtonRelease-1>", self._drag_release)
-        self.listbox.bind("<Up>", lambda _: self.move_up())
-        self.listbox.bind("<Down>", lambda _: self.move_down())
-        self.root.bind("<Return>", lambda _: self._on_done())
-
-    # ──────────────────────────────────────────
-    #  Hilfsmethoden UI
-    # ──────────────────────────────────────────
-
-    def _mk_btn(self, parent, label: str, cmd) -> tk.Button:
-        btn = tk.Button(
-            parent, text=label,
-            font=("Helvetica", 10),
-            bg=BTN_BG, fg=TEXT,
-            activebackground=BTN_HOVER, activeforeground=TEXT,
-            relief=tk.FLAT, cursor="hand2",
-            padx=14, pady=7,
-            command=cmd,
-        )
-        self._add_hover(btn, BTN_BG, BTN_HOVER)
-        return btn
-
-    @staticmethod
-    def _add_hover(widget: tk.Widget, normal: str, hover: str):
-        widget.bind("<Enter>", lambda _: widget.configure(bg=hover))
-        widget.bind("<Leave>", lambda _: widget.configure(bg=normal))
-
-    # ──────────────────────────────────────────
-    #  Listbox aktualisieren
-    # ──────────────────────────────────────────
-
-    def _refresh(self, keep_selection: int | None):
-        """Listbox neu zeichnen, Auswahl ggf. wiederherstellen."""
-        self.listbox.delete(0, tk.END)
-        for i, item in enumerate(self.items):
-            # Nummeriertes Label
-            self.listbox.insert(tk.END, f"  {i + 1:>2}.  {item}")
-
-        if keep_selection is not None:
-            idx = max(0, min(keep_selection, len(self.items) - 1))
-            self.listbox.select_set(idx)
-            self.listbox.see(idx)
-            self.listbox.activate(idx)
-
-    # ──────────────────────────────────────────
-    #  Verschiebe-Logik
-    # ──────────────────────────────────────────
-
-    def _current(self) -> int | None:
-        sel = self.listbox.curselection()
-        return sel[0] if sel else None
-
-    def move_up(self):
-        idx = self._current()
-        if idx is None or idx == 0:
-            return
-        self.items[idx - 1], self.items[idx] = self.items[idx], self.items[idx - 1]
-        self._refresh(idx - 1)
-
-    def move_down(self):
-        idx = self._current()
-        if idx is None or idx >= len(self.items) - 1:
-            return
-        self.items[idx + 1], self.items[idx] = self.items[idx], self.items[idx + 1]
-        self._refresh(idx + 1)
-
-    # ──────────────────────────────────────────
-    #  Drag & Drop
-    # ──────────────────────────────────────────
-
-    def _drag_start(self, event: tk.Event):
-        self._drag_start_idx = self.listbox.nearest(event.y)
-        self.listbox.select_clear(0, tk.END)
-        self.listbox.select_set(self._drag_start_idx)
-
-    def _drag_motion(self, event: tk.Event):
-        if self._drag_start_idx is None:
-            return
-        target = self.listbox.nearest(event.y)
-        if target != self._drag_start_idx:
-            self.items[self._drag_start_idx], self.items[target] = (
-                self.items[target],
-                self.items[self._drag_start_idx],
-            )
-            self._drag_start_idx = target
-            self._refresh(target)
-
-    def _drag_release(self, _event: tk.Event):
-        self._drag_start_idx = None
-
-    # ──────────────────────────────────────────
-    #  Abschluss
-    # ──────────────────────────────────────────
-
-    def _on_done(self):
-        self.result = list(self.items)
-        self.root.quit()
-
-    def get_result(self) -> list[str]:
-        """Gibt die finale Liste zurück (nach mainloop)."""
-        return self.result if self.result is not None else self.items
-
-
-def get_sorted_TPs(tps):
-    root = tk.Tk()
-    app = ReorderableListApp(root, tps)
-    root.mainloop()
-    root.destroy()
-    # ── Ab hier steht die sortierte Liste zur Verfügung ──
-    ergebnis = app.get_result()
-    return ergebnis
-
-
-def get_files(dir_, ending):
-    pdfs = []
-    dir_ = os.path.abspath(dir_)
-    for filename in os.listdir(dir_):
-        if filename.endswith(ending):
-            full_path = os.path.join(dir_, filename)
-            pdfs.append(full_path)
-        else:
-            continue
-    return pdfs
-
-
-def get_file():
-    is_valid = False
-    path = ""
-    while not is_valid:
-        path = str(input("Bitte gib den Pfad zu einer Datei (.xlsx, .csv, .docx) ein:"))
-        path = path.replace("\"", "")
-        path = path.replace("'", "")
-        if path.endswith(".xlsx") or path.endswith(".csv") or path.endswith(".docx"):
-            is_valid = True
-    path = os.path.abspath(path)
-    return path
-
-
-def get_path():
-    is_valid = False
-    path = ""
-    while not is_valid:
-        path = str(input("Bitte gib den Pfad zu einem Order ein:"))
-        if os.path.exists(path):
-            is_valid = True
-    path = os.path.abspath(path)
-    return path
+STOP_KEYWORDS = ("nord", "mitte", "sud", "sued")  # matched against the ASCII-normalized file name
 
 
 def read_file(path, images):
+    """Liest eine .xlsx-, .csv- oder .docx-Datei; gibt (DataFrame, Bilder) zurück, bei Fehlern ein leeres DataFrame."""
     df = pd.DataFrame()
     imgs = {}
     try:
@@ -321,194 +28,139 @@ def read_file(path, images):
                 df = read_docx(path)
     except ValueError:
         print("Datei ist ungültig")
-        return df, imgs
     except FileNotFoundError:
         print(f"Datei {path} existiert nicht")
-        return df, imgs
     except Exception as err:
         print("Etwas anderes ist schief gelaufen", err)
-        return df, imgs
     return df, imgs
 
 
-def get_several_files_ui(ending):
-    root = tk.Tk()
-    root.withdraw()
-    if ending == "":
-        file_paths = filedialog.askopenfilenames(
-            title="Wähle mehrere Word- oder Exceltabellen aus",
-            filetypes=[("Word- und Excel-Dateien", "*.docx *.xlsx *.xls")]
-        )
-    else:
-        file_paths = filedialog.askopenfilenames(
-            title="Wähle mehrere Dateien aus",
-            filetypes=[("Dateien", ending)]
-        )
-    return list(file_paths)
-
-
-def get_file_ui():
-    root = tk.Tk()
-    root.withdraw()
-    file_path = filedialog.askopenfilename(
-        title="Wähle eine Datei aus",
-        filetypes=[("Word-,CSV- oder Excel-Datei", "*.docx *.xlsx *.xls *.csv")]
-    )
-    return file_path
-
-
 def read_files(files, images):
-    res = []
+    """Liest mehrere Dateien; nicht lesbare Dateien werden übersprungen."""
+    dfs = []
     imgs = []
     for file in files:
-        tmp, img_dict = read_file(file, images)
-        if not tmp.empty:
-            res.append(tmp)
-            imgs.append(img_dict)
-        else:
+        df, img_dict = read_file(file, images)
+        if df.empty:
             print("Konnte Datei ", file, "nicht lesen")
-    return res, imgs
+            continue
+        dfs.append(df)
+        imgs.append(img_dict)
+    return dfs, imgs
 
 
 def iter_unique_cells(cells):
+    """Überspringt direkt aufeinanderfolgende Duplikate (verbundene Zellen)."""
     prior_cell = None
-    for c in cells:
-        if c == prior_cell:
+    for cell in cells:
+        if cell == prior_cell:
             continue
-        yield c
-        prior_cell = c
+        yield cell
+        prior_cell = cell
 
 
 def read_docx(path):
+    """Liest die Tabellen eines Word-Dokuments; die erste Zeile ist die Kopfzeile."""
     document = Document(path)
-    data = []
-    for table in document.tables:
-        for row in table.rows:
-            data.append([cell.text.strip() for cell in list(iter_unique_cells(row.cells))])
-
-    # Convert the data to a DataFrame
-    df = pd.DataFrame(data=data, dtype=str)
-
-    # Optional: If the first row is the header
-    df.columns = df.iloc[0]
-    df = df[1:].reset_index(drop=True)
-    return df
+    data = [
+        [cell.text.strip() for cell in iter_unique_cells(row.cells)]
+        for table in document.tables
+        for row in table.rows
+    ]
+    return _first_row_as_header(pd.DataFrame(data=data, dtype=str))
 
 
 def read_excel(file):
-    # Read first 20 rows without headers to detect the header row
+    """Liest eine Excel-Datei; die Kopfzeile ist die erste nicht-leere Zeile."""
     preview = pd.read_excel(file, header=None, nrows=20)
-
-    # Find first row index where there's at least one non-empty cell (likely header)
-    header_row_idx = preview.apply(lambda row: row.notna().any(), axis=1).idxmax()
-
-    # Read again using that row as header, skip everything before
+    header_row_idx = preview.notna().any(axis=1).idxmax()
     df = pd.read_excel(file, dtype=str, keep_default_na=False, header=header_row_idx)
+    return df.dropna(how='all')
 
-    # Optional: drop fully empty rows below the table if any
-    df = df.dropna(how='all')
-    return df
+
+def _first_row_as_header(df):
+    df.columns = df.iloc[0]
+    return df[1:].reset_index(drop=True)
 
 
 def _extract_cell(cell):
-    pictures = []
+    """Gibt (Text, Bilder als Bytes) einer Word-Zelle zurück."""
     paragraph_texts = []
-
     for para in cell.paragraphs:
         fragments = []
         for run in para.runs:
-            run_elem = run._element
-            for node in run_elem.iter():
+            for node in run._element.iter():
                 if node.tag.endswith('}t') and node.text:
                     fragments.append(node.text)
                 elif node.tag.endswith('}br'):
                     fragments.append('\n')  # soft line break
+        paragraph_texts.append(''.join(fragments))
 
-        paragraph_text = ''.join(fragments)
-        paragraph_texts.append(paragraph_text)
-
-    clean_text = '\n'.join(paragraph_texts).strip()
-
-    # Extract images
+    pictures = []
     for node in cell._element.iter():
         if node.tag.endswith('}blip'):
-            rId = node.get(qn('r:embed'))
-            if rId:
-                img_part = cell.part.related_parts[rId]
-                pictures.append(img_part.blob)
+            r_id = node.get(qn('r:embed'))
+            if r_id:
+                pictures.append(cell.part.related_parts[r_id].blob)
 
-    return clean_text, pictures
+    return '\n'.join(paragraph_texts).strip(), pictures
 
 
 def read_docx_with_images(path, img_column='Photo'):
+    """Wie `read_docx`, aber Zellen mit Bild enthalten einen Schlüssel für die zurückgegebene Bild-Map."""
     doc = Document(path)
     rows, img_registry = [], {}
     img_col_index = None  # first column that actually contains a picture
 
-    for t in doc.tables:
-        for r_idx, row in enumerate(t.rows):
+    for table in doc.tables:
+        for row in table.rows:
             current = []
             for c_idx, cell in enumerate(row.cells):
-                txt, pics = _extract_cell(cell)
-
-                if pics:  # keep only the *first* image per cell
-                    # give every image a unique key we can round‑trip later
+                text, pictures = _extract_cell(cell)
+                if pictures:  # keep only the first image per cell
                     key = f"img_{len(img_registry)}"
-                    img_registry[key] = pics[0]
-
-                    # remember which column holds pictures so we can rename it
-                    img_col_index = c_idx if img_col_index is None else img_col_index
+                    img_registry[key] = pictures[0]
+                    if img_col_index is None:
+                        img_col_index = c_idx
                     current.append(key)
                 else:
-                    current.append(txt)
+                    current.append(text)
             rows.append(current)
 
-    df = pd.DataFrame(rows, dtype=str)
-
-    # treat first row as header
-    df.columns = df.iloc[0]
-    df = df.iloc[1:].reset_index(drop=True)
-
-    # make sure the picture column has a nice, stable name
+    df = _first_row_as_header(pd.DataFrame(rows, dtype=str))
     if img_col_index is not None:
-        df.rename(columns={df.columns[img_col_index]: img_column}, inplace=True)
-
+        df = df.rename(columns={df.columns[img_col_index]: img_column})
     return df, img_registry
 
 
-def rename_files(col_old, col_new):
-    for old, new in zip(col_old, col_new):
-        dir, file = os.path.split(old)
-        new_path = os.path.join(dir, new)
-        os.rename(old, new_path)
+def rename_files(old_paths, new_names):
+    """Benennt jede Datei innerhalb ihres Ordners um."""
+    for old, new in zip(old_paths, new_names):
+        os.rename(old, os.path.join(os.path.dirname(old), new))
 
 
 def create_folders(df):
-    files_old = df.drop_duplicates(subset="Kennzeichen", keep="first")
-    files_old = files_old["Kennzeichen"].values.tolist()
-    files_old = [x for x in files_old if not x in ["", "?"]]
-    for path in files_old:
-        path = os.path.join(".", path)
-        Path(path).mkdir(parents=True, exist_ok=True)
-    return files_old
+    """Legt für jedes Kennzeichen einen Ordner an und gibt die Kennzeichen zurück."""
+    plates = [p for p in df["Kennzeichen"].drop_duplicates() if p not in ("", "?")]
+    for plate in plates:
+        Path(".", plate).mkdir(parents=True, exist_ok=True)
+    return plates
 
 
 def move_files(df):
-    seen = []
-    for index, row in df.iterrows():
-        file_ = row["Datei neu"]
-        if file_ in ["", "?"]:
+    """Verschiebt die umbenannten Traces-Dateien in den Ordner ihres Kennzeichens."""
+    moved = set()
+    for _, row in df.iterrows():
+        new_name = row["Datei neu"]
+        if new_name in ("", "?") or new_name in moved:
             continue
-        file_old = row["Datei"]
-        dir, _ = os.path.split(file_old)
-        file_path = os.path.join(dir, file_)
-        new_path = os.path.join(".", row["Kennzeichen"], file_)
-        if file_ not in seen:
-            shutil.move(file_path, new_path)
-            seen.append(file_)
+        source = os.path.join(os.path.dirname(row["Datei"]), new_name)
+        shutil.move(source, os.path.join(".", row["Kennzeichen"], new_name))
+        moved.add(new_name)
 
 
 def simple_normalize(s):
+    """Kleinbuchstaben ohne Akzente/Umlaute (ü -> u)."""
     return (unicodedata.normalize("NFKD", s)
             .encode("ASCII", "ignore")
             .decode()
@@ -516,298 +168,53 @@ def simple_normalize(s):
 
 
 def filter_stopps(files):
-    return [x for x in files for s in ["nord", "süd", "sued", "sud", "südwest", "suedwest", "sudwest", "mitte"] if
-            s in simple_normalize(x)]
+    """Behält nur Dateien, deren Name einen Trapo-Stopp (Nord, Mitte, Süd, Südwest) enthält."""
+    return [f for f in files if any(keyword in simple_normalize(f) for keyword in STOP_KEYWORDS)]
 
 
 def move_and_rename(tuples):
+    """Verschiebt je (Kennzeichen, Stopp, Word-Datei) die Datei in den Ordner und benennt ihn 'Kennzeichen_Stopp'."""
     for plate, stop, file in tuples:
-        path = os.path.join(".", plate)
-        new_path = os.path.join(".", plate + "_" + stop)
-        # move word doc to new folder
-        shutil.move(file, path)
-        # rename
-        if os.path.exists(path):
-            if not os.path.exists(new_path):
-                os.rename(path, new_path)
-            else:
-                print("Target folder name already exists.")
+        folder = os.path.join(".", plate)
+        new_folder = os.path.join(".", f"{plate}_{stop}")
+        if not os.path.exists(folder):
+            print("Ursprünglicher Ordner existiert nicht.")
+            continue
+        shutil.move(file, folder)
+        if os.path.exists(new_folder):
+            print("Zielordner existiert bereits.")
         else:
-            print("Original folder does not exist.")
+            os.rename(folder, new_folder)
 
 
 def get_all_files_from_folder(glob_path):
     return glob.glob(glob_path)
 
 
-def save_distance_sheets(paths, dfs, img_banks, img_column="Photo", max_img_size=(100, 100)):
-    for file_path, df, img_registry in zip(paths, dfs, img_banks):
-        _, fname = os.path.split(file_path)
-        base, _ = os.path.splitext(fname)
-        out_xlsx = f"{base}_Entfernung.xlsx"
-
-        # ── make a copy so we don't mutate caller's df ───────────────────────
-        df_xls = df.copy()
-
-        # If you blank image placeholders for export, keep original keys for image insertion:
-        img_keys = None
-        if img_column in df_xls.columns:
-            # keep the original column for mapping, but blank cells for export-data-writing if desired
-            img_keys = df_xls[img_column].astype(object).where(df_xls[img_column].notna(), None).tolist()
-            # Optionally blank for the exported table (so cells are empty except images)
-            df_xls[img_column] = ""
-
-        # Build list of header marker indices in the original df (rows with repeated headers)
-        header_marker_idxs = df.index[df['Nr.'] == 'Nr.'].tolist()
-
-        with pd.ExcelWriter(out_xlsx, engine='xlsxwriter') as writer:
-            # Write dataframe to sheet without pandas header (we will draw custom headers)
-            df_xls.to_excel(writer, index=False, sheet_name='Entfernung', header=False)
-            workbook = writer.book
-            worksheet = writer.sheets['Entfernung']
-
-            # Define formats
-            header_format = workbook.add_format({
-                'bold': True,
-                'font_color': 'white',
-                'bg_color': '#294879',  # Dark blue
-                'align': 'center',
-                'valign': 'vcenter'
-            })
-            cell_format = workbook.add_format({
-                'bold': True,
-                'align': 'center',
-                'valign': 'vcenter'
-            })
-            treffpunkt_format = workbook.add_format({
-                'bold': True,
-                'font_color': 'white',
-                'align': 'center',
-                'valign': 'vcenter',
-                'bg_color': '#294879',  # light blue background
-                'font_size': 12
-            })
-
-            # ---------- Place the top header row in the correct position ----------
-            # If the very first original row is a header marker (index 0), the first excel row
-            # currently contains that marker; the column names should be written one row below.
-            # Otherwise write header at excel row 0.
-            # We'll compute an offset: how many header markers are at or before index 0? normally 0 or 1.
-            # Simpler: if the first original row is header marker => header at excel row 1, else header at 0.
-            first_header_row = 0 if (len(header_marker_idxs) == 0 or header_marker_idxs[0] != 0) else 1
-            # write column names at the calculated position
-            for col_num, value in enumerate(df_xls.columns.values):
-                worksheet.write(first_header_row, col_num, value, header_format)
-
-            # ---------- Write all data cells with the cell_format ----------
-            # We must write cell values to the correct excel rows: each original row i
-            # is written at excel_row = i + shift + 0, where shift = number of header markers < = i?
-            # Because we used header=False, pandas wrote raw rows starting at Excel row 0, so the
-            # original row i was written at excel_row = i + number_of_header_markers_before_row_i
-            # (the header marker rows themselves are present in the sheet as "data rows" from df_xls).
-            # We'll re-write each visible cell using cell_format to apply bold/center.
-            # Note: df_xls has the same number of rows as df (we didn't insert Treffpunkt rows into df_xls here).
-            # But the sheet will later receive the merged Treffpunkt rows via your existing logic;
-            # to keep behavior identical, we still write all data cells here where pandas wrote them.
-
-            # Compute a helper function to count header markers before index i
-            def header_shift_for_index(i):
-                # count how many header_marker_idxs are strictly less than i
-                return sum(1 for h in header_marker_idxs if h < i)
-
-            # Re-write every cell using the cell_format at the row pandas used when exporting df_xls (accounting for shift)
-            for orig_idx in df_xls.index:
-                shift = header_shift_for_index(orig_idx)
-                excel_row = orig_idx + shift  # 0-based excel row since header=False
-                for col_num, col in enumerate(df_xls.columns):
-                    val = df_xls.iloc[orig_idx, col_num]
-                    # don't overwrite Treffpunkt merged cell writing later; safe to rewrite data cells
-                    worksheet.write(excel_row, col_num, val, cell_format)
-
-            # ---------- Insert Treffpunkt merged header for repeating header rows ----------
-            # For each header marker row in the original df, find the excel row where that marker was written,
-            # then insert the merged Treffpunkt row above the actual header row (i.e. at that excel row).
-            for row_num in header_marker_idxs:
-                # excel row where the header marker sits (pandas exported it at row = row_num + shift)
-                shift = header_shift_for_index(row_num)
-                marker_excel_row = row_num + shift
-
-                # Treffpunkt value should be taken from the row below the marker in the original df:
-                next_row = row_num + 1 if (row_num + 1) in df.index else None
-                treffpunkt_value = ""
-                if next_row is not None and 'Treffpunkt' in df.columns:
-                    treffpunkt_value = str(df.loc[next_row, 'Treffpunkt']).strip()
-
-                if treffpunkt_value:
-                    # Merge at the marker_excel_row (which is where the marker row is in sheet)
-                    worksheet.merge_range(
-                        marker_excel_row,
-                        0,
-                        marker_excel_row,
-                        len(df.columns) - 1,
-                        treffpunkt_value,
-                        treffpunkt_format
-                    )
-
-                    # After merging and writing Treffpunkt, write the column headers on the row below merged Treffpunkt.
-                    # Column header row (should align with where the marker row used to contain header names)
-                    header_row_excel = marker_excel_row + 1
-                    for col_num, value in enumerate(df.columns.values):
-                        worksheet.write(header_row_excel, col_num, value, header_format)
-
-            # ---------- Auto-size every non-image column ----------
-            for col in df_xls.columns:
-                if col == img_column:
-                    continue
-                width = max(df_xls[col].astype(str).map(len).max(), len(col))
-                idx = df_xls.columns.get_loc(col)
-                worksheet.set_column(idx, idx, width)
-
-            # ---------- Insert pictures (correct Excel row calculation) ----------
-            if img_column in df_xls.columns and img_keys is not None:
-                img_col_idx = df_xls.columns.get_loc(img_column)
-                max_col_char = 0  # final column width
-
-                for orig_idx, key in enumerate(img_keys):
-                    if key is None:
-                        continue
-
-                    # compute excel row where this original row was written
-                    shift = header_shift_for_index(orig_idx)
-                    excel_row = orig_idx + shift
-
-                    if key not in img_registry:
-                        continue
-
-                    raw = img_registry[key]
-                    buf = BytesIO(raw)
-                    w_px, h_px = Image.open(buf).size
-
-                    # scale down if needed
-                    max_w, max_h = max_img_size
-                    scale = min(1, max_w / w_px, max_h / h_px)
-
-                    w_px_scaled, h_px_scaled = int(w_px * scale), int(h_px * scale)
-                    row_height_pts = h_px_scaled * 0.75  # px → points
-                    col_width_char = w_px_scaled / 7  # px → Excel chars
-                    max_col_char = max(max_col_char, col_width_char)
-
-                    # set row height for the sheet row where the image belongs
-                    worksheet.set_row(excel_row, row_height_pts)
-
-                    # insert the picture at the computed excel_row
-                    buf.seek(0)
-                    worksheet.insert_image(
-                        excel_row, img_col_idx, "",
-                        {
-                            "image_data": buf,
-                            "x_scale": scale,
-                            "y_scale": scale,
-                            "x_offset": 0,
-                            "y_offset": 0,
-                            "positioning": 1,  # moves/sizes with cells
-                        },
-                    )
-
-                # final width for the picture column
-                worksheet.set_column(img_col_idx, img_col_idx, max_col_char)
-
-    # function end
-
-
-def save_ro_excel(dfs, files):
-    for df, file_path in zip(dfs, files):
-        _, fname = os.path.split(file_path)
-        base, _ = os.path.splitext(fname)
-        out_xlsx = f"{base}.xlsx"
-
-        with pd.ExcelWriter(out_xlsx, engine='xlsxwriter') as writer:
-            workbook = writer.book
-            worksheet = workbook.add_worksheet('Sheet1')
-            writer.sheets['Sheet1'] = worksheet
-
-            # Format für Titel
-            title_format = workbook.add_format({
-                'bold': True,
-                'align': 'center',
-                'valign': 'vcenter',
-            })
-
-            # 1. Titelzeile einfügen
-            last_col = len(df.columns)
-            worksheet.merge_range(0, 0, 0, last_col - 1, ro_header, title_format)
-
-            # 2. Tabellenformat für zentrierte Zellen
-            cell_format = workbook.add_format({
-                'align': 'center',
-                'valign': 'vcenter'
-            })
-
-            # 2. DataFrame darunter schreiben
-            df_start_row = 1
-            df.to_excel(writer, sheet_name='Sheet1', startrow=df_start_row, index=False)
-
-            # 3. Alle Spalten zentrieren + Breite automatisch
-            for i, col in enumerate(df.columns):
-                max_len = max(df[col].astype(str).map(len).max(), len(col))
-                worksheet.set_column(i, i, max_len, cell_format)
-
-            # 4. Untere Zeile einfügen
-            bottom_row = df_start_row + len(df) + 1
-            bottom_format = workbook.add_format({
-                'align': 'center',
-                'valign': 'vcenter'
-            })
-
-            # Linke drei Spalten mergen
-            if last_col >= 3:
-                worksheet.merge_range(bottom_row, 0, bottom_row, 2, footer_left, bottom_format)
-            # Rechte drei Spalten mergen
-            if last_col >= 6:
-                worksheet.merge_range(bottom_row, last_col - 3, bottom_row, last_col - 1, footer_right,
-                                      bottom_format)
-            elif last_col > 3:  # Falls insgesamt <6 Spalten, rechtes Merge ab Spalte 3
-                worksheet.merge_range(bottom_row, 3, bottom_row, last_col - 1, footer_right, bottom_format)
-
-
 def sort_word_table(input_path, output_path, sort_column, sort_order):
     """
-    Sortiert eine Word-Tabelle nach vorgegebener Reihenfolge.
-    Alle Zellformatierungen bleiben 1:1 erhalten.
+    Sortiert die erste Word-Tabelle nach vorgegebener Reihenfolge.
+    Alle Zellformatierungen bleiben 1:1 erhalten, die Kopfzeile bleibt oben.
 
     sort_column: Index der Spalte nach der sortiert wird (0-basiert)
-    sort_order:  gewünschte Reihenfolge als Liste, z.B. ["München", "Berlin", "Hamburg"]
+    sort_order:  gewünschte Reihenfolge als Liste, z.B. ["München", "Berlin", "Hamburg"];
+                 Zeilen, die nicht darin vorkommen, landen am Ende.
     """
-    doc   = Document(input_path)
-    table = doc.tables[0]
-    tbl   = table._tbl
+    doc = Document(input_path)
+    tbl = doc.tables[0]._tbl
+    data_rows = tbl.findall(qn('w:tr'))[1:]  # keep the header row untouched
+    rank = {value: position for position, value in enumerate(sort_order)}
 
-    # Alle Zeilen-Elemente holen
-    rows = tbl.findall(qn('w:tr'))
-    header    = rows[0]        # Header unangetastet lassen
-    data_rows = rows[1:]       # Nur Datenzeilen sortieren
-
-    def row_key(tr):
-        """Gibt den Textwert der Sort-Spalte zurück."""
+    def row_rank(tr):
         cells = tr.findall(qn('w:tc'))
         if sort_column >= len(cells):
-            return len(sort_order)   # unbekannte ans Ende
-        text = ''.join(
-            t.text for t in cells[sort_column].iter(qn('w:t'))
-            if t.text
-        ).strip()
-        try:
-            return sort_order.index(text)
-        except ValueError:
-            return len(sort_order)   # nicht in sort_order → ans Ende
+            return len(sort_order)
+        text = ''.join(t.text for t in cells[sort_column].iter(qn('w:t')) if t.text).strip()
+        return rank.get(text, len(sort_order))
 
-    # Zeilen umsortieren
     for tr in data_rows:
         tbl.remove(tr)
-
-    sorted_rows = sorted(data_rows, key=row_key)
-
-    for tr in sorted_rows:
+    for tr in sorted(data_rows, key=row_rank):
         tbl.append(tr)
 
     doc.save(output_path)

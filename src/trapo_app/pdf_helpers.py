@@ -1,97 +1,102 @@
+"""Extrahiert Daten aus den Traces-PDFs."""
 import re
-import sys
 
 import camelot
 import ftfy
 import pandas as pd
 
-cells_to_keep = [
+from trapo_app.errors import TrapoError
+
+CELLS_TO_KEEP = (
     "IMSOC",
     "Bestimmungsort ",
     "Identifikationsnummer",
-    "| Rumänien"
-]
+    "| Rumänien",
+)
+DESTINATION_REGEX = re.compile(r"(.+);(.*\d+\s?[a-zA-Z]?)\s(\d{4,}\s.+)")
 
 
 def get_table_data(files):
+    """Gibt je Datei die relevanten Zellentexte (siehe CELLS_TO_KEEP) der ersten beiden Seiten zurück."""
     rows_per_file = []
     for file in files:
-        rows = []
-        tbls = []
         try:
-            tbls = camelot.read_pdf(file, pages="1-2", flavor="lattice", backend="pdfium", line_scale=20)
+            tables = camelot.read_pdf(file, pages="1-2", flavor="lattice", backend="pdfium", line_scale=20)
         except Exception as err:
-            print("Etwas ist beim PDF einlesen schief gegangen:", err)
-            sys.exit(1)
-        for tab in tbls:
-            tab = tab.df
-            for i, row in tab.iterrows():
+            raise TrapoError(f"Etwas ist beim PDF einlesen schief gegangen: {err}") from err
+
+        rows = []
+        for table in tables:
+            for _, row in table.df.iterrows():
                 for cell in row:
                     cell = ftfy.fix_text(cell)  # remove known extraction errors
                     cell = cell.replace('\n', ' ')  # for lattice mode with line-spanning entries
                     cell = re.sub(" +", ' ', cell)  # multiple whitespaces to only one
-                    for w in cells_to_keep:
-                        if w in cell:
-                            rows.append(cell)
+                    if any(keyword in cell for keyword in CELLS_TO_KEEP):
+                        rows.append(cell)
         rows_per_file.append(rows)
-
     return rows_per_file
 
 
-def extract_table_data(files):
-    results = []
-    raw = get_table_data(files)
+def _parse_intra(row, file):
+    parts = row.split("Bezugsnummer ")
+    if len(parts) < 2:
+        print("Fehler: Datei hat keine Bezugsnummer:", file)
+        return None
+    intra = parts[1]
+    return "I" + intra if intra.startswith("N") else intra
 
-    for file, rows in zip(files, raw):
-        intra = ""
-        contact = ""
+
+def _parse_destination(row, file):
+    row = row.split("Name ")[1].split(" ISO")[0].replace(" Adresse ", ";")
+    match = DESTINATION_REGEX.match(row)
+    if not match:
+        print("Fehler: Kein Bestimmungsort bei Datei:", file)
+        return None
+    return ", ".join(match.groups())
+
+
+def _parse_chip(row, file):
+    parts = row.split("Identifikationsnummer ")
+    if len(parts) < 2:
+        print("Fehler: Datei hat keine Identifikationsnummer:", file)
+        return None
+    return parts[1].replace("Microchip ", "")
+
+
+def _parse_plate(row):
+    return row.split(" |")[0].split(" ")[-1]
+
+
+def extract_table_data(files):
+    """Gibt je Chip eine Zeile [Datei, Intra, Chip, Kontakt, Kennzeichen] zurück."""
+    results = []
+    for file, rows in zip(files, get_table_data(files)):
+        intra = contact = plate = ""
         chips = []
-        kennzeichen = ""
+        current_row = ""
         try:
-            for row in rows:
-                if "IMSOC" in row:
-                    row_tmp = row.split("Bezugsnummer ")
-                    if len(row_tmp) < 2:
-                        print("Fehler: Datei hat keine Bezugsnummer:", file)
-                        continue
-                    row = row_tmp[1]
-                    if row.startswith("N"):
-                        row = "I" + row
-                    intra = row
-                elif "Bestimmungsort" in row:
-                    row = row.split("Name ")[1]
-                    row = row.split(" ISO")[0]
-                    row = row.replace(" Adresse ", ";")
-                    match = re.match(r"(.+);(.*\d+\s?[a-zA-Z]?)\s(\d{4,}\s.+)", row)
-                    if not match:
-                        print("Fehler: Kein Bestimmungsort bei Datei:", file)
-                        continue
-                    row = match.group(1) + ", " + match.group(2) + ", " + match.group(3)
-                    contact = row
-                elif "Identifikationsnummer" in row:
-                    row_tmp = row.split("Identifikationsnummer ")
-                    if len(row_tmp) < 2:
-                        print("Fehler: Datei hat keine Identifikationsnummer:", file)
-                        continue
-                    row = row_tmp[1]
-                    print(row)
-                    row = row.replace("Microchip ", "")
-                    chips.append(row)
-                elif "| Rumänien" in row:
-                    row = row.split(" |")[0]
-                    kennzeichen = row.split(" ")[-1]
+            for current_row in rows:
+                if "IMSOC" in current_row:
+                    intra = _parse_intra(current_row, file) or intra
+                elif "Bestimmungsort" in current_row:
+                    contact = _parse_destination(current_row, file) or contact
+                elif "Identifikationsnummer" in current_row:
+                    chip = _parse_chip(current_row, file)
+                    if chip is not None:
+                        chips.append(chip)
+                elif "| Rumänien" in current_row:
+                    plate = _parse_plate(current_row)
         except Exception as err:
-            print("Fehler bei Datei und Zeile:", file, "\n", row, "\n", err)
+            print("Fehler bei Datei und Zeile:", file, "\n", current_row, "\n", err)
             continue
 
-        for chip in chips:
-                results.append([file, intra, str(chip), contact, kennzeichen])
+        results.extend([file, intra, str(chip), contact, plate] for chip in chips)
     return results
 
 
 def extract_traces(files):
-    cols = ["Datei", "Intra", "Chip", "Kontakt", "Kennzeichen"]
-    results = extract_table_data(files)
-    df_result = pd.DataFrame(results, columns=cols)
-    df_result = df_result.sort_values(['Kontakt', 'Chip'])
-    return df_result
+    """Extrahiert alle Traces-Daten als DataFrame, sortiert nach Kontakt und Chip."""
+    columns = ["Datei", "Intra", "Chip", "Kontakt", "Kennzeichen"]
+    df = pd.DataFrame(extract_table_data(files), columns=columns)
+    return df.sort_values(['Kontakt', 'Chip'])
