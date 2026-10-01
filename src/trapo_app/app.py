@@ -57,6 +57,7 @@ def main():
     print("- trapo-kombi: Kombiniert mehrere Tabellen zu einer")
     print("- trapo-ro: Erstellt eine Excel-Liste mit rumänischen Titeln aus der Trapotabelle")
     print("- trapo-sort: Sortiert die Tabelle basierend auf der eingegebenen Reihenfolge der Treffpunkte")
+    print("- trapo-split: Teilt die Tabelle anhand der Treffpunkte in einzelne Word-Dateien (z.B. Nord, Südwest) auf")
 
 
 @cli_command
@@ -164,6 +165,33 @@ def sort_by_tp():
     output = _output_path(f"{Path(source).stem}_sortiert.docx")
     io_helpers.sort_word_table(source, str(output), list(df.columns).index("Treffpunkt"), sorted_tps)
     print(f"Fertig! Die Datei liegt im Ordner '{Path.cwd()}'")
+
+
+@cli_command
+def split_by_tp():
+    source = _ask_for_file(f"{CHAT_FILE_PROMPT}\n{ADDRESS_COLUMN_HINT}")
+    if not source.endswith(".docx"):
+        raise TrapoError("Zum Aufteilen wird eine Word-Datei (.docx) benötigt.")
+    df, _ = io_helpers.read_file(source, False)
+    if "Treffpunkt" not in df.columns:
+        raise TrapoError("Die Tabelle hat keine Spalte 'Treffpunkt'.")
+    print("Gib im sich öffnenden Fenster die Namen der Teillisten ein, z.B. Nord, Südwest, Conivet-Mitte.")
+    names = gui.get_part_names()
+    if not names:
+        raise TrapoError("Abgebrochen: Es wurden keine Teillisten angelegt.")
+    print("Ordne nun jedem Treffpunkt eine Teilliste zu.")
+    parts = gui.get_part_assignments(names, list(df['Treffpunkt'].unique()))
+    if not parts:
+        raise TrapoError("Abgebrochen: Die Treffpunkte wurden nicht zugeordnet.")
+    written = io_helpers.split_word_table(
+        source, str(_output_path(Path(source).stem)), list(df.columns).index("Treffpunkt"), parts)
+    for name in parts:
+        if name in written:
+            path, rows = written[name]
+            print(f"- {Path(path).name}: {rows} Zeilen")
+        else:
+            print(f"- {name}: keine Zeilen, Datei wurde nicht erstellt")
+    print(f"Fertig! Die Dateien liegen im Ordner '{Path.cwd()}'")
 
 
 if __name__ == "__main__":

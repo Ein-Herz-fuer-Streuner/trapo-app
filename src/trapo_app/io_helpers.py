@@ -191,6 +191,14 @@ def get_all_files_from_folder(glob_path):
     return glob.glob(glob_path)
 
 
+def _row_cell_text(tr, column):
+    """Text der Zelle `column` einer Word-Tabellenzeile (leer, wenn die Zeile kürzer ist)."""
+    cells = tr.findall(qn('w:tc'))
+    if column >= len(cells):
+        return ""
+    return ''.join(t.text for t in cells[column].iter(qn('w:t')) if t.text).strip()
+
+
 def sort_word_table(input_path, output_path, sort_column, sort_order):
     """
     Sortiert die erste Word-Tabelle nach vorgegebener Reihenfolge.
@@ -206,11 +214,7 @@ def sort_word_table(input_path, output_path, sort_column, sort_order):
     rank = {value: position for position, value in enumerate(sort_order)}
 
     def row_rank(tr):
-        cells = tr.findall(qn('w:tc'))
-        if sort_column >= len(cells):
-            return len(sort_order)
-        text = ''.join(t.text for t in cells[sort_column].iter(qn('w:t')) if t.text).strip()
-        return rank.get(text, len(sort_order))
+        return rank.get(_row_cell_text(tr, sort_column), len(sort_order))
 
     for tr in data_rows:
         tbl.remove(tr)
@@ -218,3 +222,37 @@ def sort_word_table(input_path, output_path, sort_column, sort_order):
         tbl.append(tr)
 
     doc.save(output_path)
+
+
+def split_word_table(input_path, output_base, split_column, parts):
+    """
+    Teilt die erste Word-Tabelle in mehrere Dateien `<output_base>_<Teil>.docx`.
+    Jede Datei ist eine Kopie des Originals (Formatierung bleibt erhalten), in der nur die
+    Zeilen der Teilliste übrig bleiben; die Kopfzeile bleibt immer stehen.
+
+    split_column: Index der Spalte mit dem Treffpunkt (0-basiert)
+    parts:        {Teilname: [Treffpunkte]}
+    Gibt {Teilname: (Pfad, Anzahl Zeilen)} zurück; Teile ohne Zeilen werden nicht gespeichert.
+    """
+    written = {}
+    for name, meeting_points in parts.items():
+        doc = Document(input_path)
+        tbl = doc.tables[0]._tbl
+        wanted = set(meeting_points)
+        kept = 0
+        for tr in tbl.findall(qn('w:tr'))[1:]:
+            if _row_cell_text(tr, split_column) in wanted:
+                kept += 1
+            else:
+                tbl.remove(tr)
+        if not kept:
+            continue
+        path = f"{output_base}_{_safe_file_part(name)}.docx"
+        doc.save(path)
+        written[name] = (path, kept)
+    return written
+
+
+def _safe_file_part(name):
+    """Ersetzt Zeichen, die in Dateinamen nicht erlaubt sind."""
+    return "".join("-" if c in '\\/:*?"<>|' else c for c in name).strip()

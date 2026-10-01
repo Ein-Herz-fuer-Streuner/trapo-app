@@ -34,3 +34,14 @@ def test_read_docx_uses_first_row_as_header(tmp_path):
 def test_filter_stopps_returns_each_file_once():
     files = ["a-SÜDWEST-V1.docx", "b-NORD.docx", "c-other.docx"]
     assert io_helpers.filter_stopps(files) == ["a-SÜDWEST-V1.docx", "b-NORD.docx"]
+
+
+def test_split_word_table_writes_one_file_per_part(tmp_path):
+    src = tmp_path / "trapo.docx"
+    _table_doc(src, [["Treffpunkt", "Name"], ["B", "1"], ["A", "2"], ["C", "3"], ["B", "4"]])
+    parts = {"Nord": ["A", "C"], "Süd/West": ["B"], "Leer": ["X"]}
+    written = io_helpers.split_word_table(str(src), str(tmp_path / "trapo"), 0, parts)
+    assert set(written) == {"Nord", "Süd/West"}  # parts without rows are not written
+    assert written["Nord"] == (str(tmp_path / "trapo_Nord.docx"), 2)
+    assert _first_column(tmp_path / "trapo_Nord.docx") == ["Treffpunkt", "A", "C"]
+    assert _first_column(tmp_path / "trapo_Süd-West.docx") == ["Treffpunkt", "B", "B"]
