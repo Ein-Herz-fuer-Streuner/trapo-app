@@ -1,7 +1,7 @@
 """Tk-Oberflächen: Dateiauswahl und Sortierdialog für Treffpunkte."""
 import tkinter as tk
 from contextlib import contextmanager
-from tkinter import filedialog
+from tkinter import filedialog, messagebox, ttk
 
 # ──────────────────────────────────────────────
 #  Farb-Palette
@@ -62,6 +62,165 @@ def get_sorted_tps(tps):
     root.mainloop()
     root.destroy()
     return app.get_result()
+
+
+def get_part_names():
+    """Fragt die Namen der Teillisten ab; gibt None zurück, wenn der Dialog abgebrochen wurde."""
+    root = tk.Tk()
+    app = PartNamesApp(root)
+    root.mainloop()
+    root.destroy()
+    return app.result
+
+
+def get_part_assignments(parts, meeting_points):
+    """
+    Lässt den Nutzer jedem Treffpunkt eine Teilliste zuordnen.
+    Gibt {Teilliste: [Treffpunkte]} zurück oder None, wenn der Dialog abgebrochen wurde.
+    """
+    root = tk.Tk()
+    app = AssignmentApp(root, parts, meeting_points)
+    root.mainloop()
+    root.destroy()
+    return app.result
+
+
+def _style_window(root, title, width=WINDOW_WIDTH, height=WINDOW_HEIGHT):
+    root.title(title)
+    root.minsize(360, 400)
+    root.configure(bg=BG)
+    x = (root.winfo_screenwidth() - width) // 2
+    y = (root.winfo_screenheight() - height) // 2
+    root.geometry(f"{width}x{height}+{x}+{y}")
+
+
+def _header(root, title, subtitle):
+    header = tk.Frame(root, bg=ACCENT, pady=18)
+    header.pack(fill=tk.X)
+    tk.Label(header, text=title, font=("Helvetica", 15, "bold"), bg=ACCENT, fg="white").pack()
+    tk.Label(header, text=subtitle, font=("Helvetica", 9), bg=ACCENT, fg="#C7CCFA").pack(pady=(2, 0))
+
+
+def _done_button(parent, command):
+    btn = tk.Button(
+        parent, text="✓   Fertig", font=("Helvetica", 12, "bold"),
+        bg=SUCCESS, fg="black", activebackground=SUCCESS_DK, activeforeground="white",
+        relief=tk.FLAT, cursor="hand2", padx=24, pady=10, command=command,
+    )
+    btn.bind("<Enter>", lambda _: btn.configure(bg=SUCCESS_DK))
+    btn.bind("<Leave>", lambda _: btn.configure(bg=SUCCESS))
+    return btn
+
+
+class PartNamesApp:
+    """Tkinter-Fenster zum Eingeben der Namen der Teillisten (z.B. Nord, Südwest)."""
+
+    def __init__(self, root: tk.Tk):
+        self.root = root
+        self.names: list[str] = []
+        self.result = None
+
+        _style_window(root, "Teillisten anlegen")
+        _header(root, "Namen der Teillisten", "Name eingeben · Enter oder Hinzufügen")
+
+        content = tk.Frame(root, bg=BG, padx=20, pady=16)
+        content.pack(fill=tk.BOTH, expand=True)
+
+        entry_row = tk.Frame(content, bg=BG)
+        entry_row.pack(fill=tk.X)
+        self.entry = tk.Entry(entry_row, font=("Helvetica", 12), relief=tk.FLAT,
+                              highlightthickness=1, highlightbackground=BORDER)
+        self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=6)
+        tk.Button(entry_row, text="Hinzufügen", font=("Helvetica", 10), bg=BTN_BG, fg=TEXT,
+                  relief=tk.FLAT, cursor="hand2", padx=14, pady=7,
+                  command=self._add).pack(side=tk.LEFT, padx=(6, 0))
+
+        self.listbox = tk.Listbox(content, font=("Helvetica", 11), bg=PANEL_BG, fg=TEXT,
+                                  selectbackground=SELECTED_BG, selectforeground=TEXT,
+                                  activestyle="none", relief=tk.FLAT, highlightthickness=1,
+                                  highlightbackground=BORDER)
+        self.listbox.pack(fill=tk.BOTH, expand=True, pady=12)
+
+        buttons = tk.Frame(content, bg=BG)
+        buttons.pack(fill=tk.X, pady=(0, 12))
+        tk.Button(buttons, text="Ausgewählte entfernen", font=("Helvetica", 10), bg=BTN_BG, fg=TEXT,
+                  relief=tk.FLAT, cursor="hand2", padx=14, pady=7,
+                  command=self._remove).pack(side=tk.LEFT)
+
+        _done_button(content, self._on_done).pack(fill=tk.X)
+
+        self.entry.bind("<Return>", lambda _: self._add())
+        self.listbox.bind("<BackSpace>", lambda _: self._remove())
+        self.entry.focus_set()
+
+    def _add(self):
+        name = self.entry.get().strip()
+        if not name:
+            return
+        if name.lower() in (n.lower() for n in self.names):
+            messagebox.showwarning("Doppelter Name", f"'{name}' gibt es schon.")
+            return
+        self.names.append(name)
+        self.listbox.insert(tk.END, f"  {name}")
+        self.entry.delete(0, tk.END)
+
+    def _remove(self):
+        for idx in reversed(self.listbox.curselection()):
+            self.listbox.delete(idx)
+            del self.names[idx]
+
+    def _on_done(self):
+        if not self.names:
+            messagebox.showwarning("Keine Teillisten", "Bitte lege mindestens eine Teilliste an.")
+            return
+        self.result = list(self.names)
+        self.root.quit()
+
+
+class AssignmentApp:
+    """Tkinter-Fenster, in dem jedem Treffpunkt per Auswahlliste eine Teilliste zugeordnet wird."""
+
+    def __init__(self, root: tk.Tk, parts: list[str], meeting_points: list[str]):
+        self.root = root
+        self.meeting_points = list(meeting_points)
+        self.result = None
+
+        _style_window(root, "Treffpunkte zuordnen", height=640)
+        _header(root, "Treffpunkte zuordnen", "Wähle für jeden Treffpunkt die passende Teilliste")
+
+        content = tk.Frame(root, bg=BG, padx=20, pady=16)
+        content.pack(fill=tk.BOTH, expand=True)
+        _done_button(content, self._on_done).pack(side=tk.BOTTOM, fill=tk.X, pady=(12, 0))
+
+        canvas = tk.Canvas(content, bg=BG, highlightthickness=0)
+        scrollbar = tk.Scrollbar(content, orient=tk.VERTICAL, command=canvas.yview)
+        rows = tk.Frame(canvas, bg=BG)
+        rows.bind("<Configure>", lambda _: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=rows, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.choices = []
+        for row, tp in enumerate(self.meeting_points):
+            tk.Label(rows, text=tp or "(leer)", font=("Helvetica", 11), bg=BG, fg=TEXT,
+                     anchor="w", width=24).grid(row=row, column=0, sticky="w", pady=3)
+            choice = tk.StringVar()
+            ttk.Combobox(rows, textvariable=choice, values=parts, state="readonly",
+                         width=18).grid(row=row, column=1, padx=(8, 0), pady=3)
+            self.choices.append(choice)
+
+    def _on_done(self):
+        missing = [tp or "(leer)" for tp, choice in zip(self.meeting_points, self.choices) if not choice.get()]
+        if missing:
+            messagebox.showwarning("Zuordnung unvollständig",
+                                   "Diese Treffpunkte haben noch keine Teilliste:\n\n" + "\n".join(missing))
+            return
+        result = {}
+        for tp, choice in zip(self.meeting_points, self.choices):
+            result.setdefault(choice.get(), []).append(tp)
+        self.result = result
+        self.root.quit()
 
 
 class ReorderableListApp:
